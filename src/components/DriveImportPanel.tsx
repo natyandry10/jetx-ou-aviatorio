@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { AlertTriangle, CloudDownload, RefreshCw } from 'lucide-react';
 import { ImportMetadata, JsonRecord } from '../types';
 import { DriveFile, listDriveJsonFiles, loadDriveJsonFile } from '../utils/drive';
@@ -8,8 +8,6 @@ import { GoogleDriveLoginPanel } from './GoogleDriveLoginPanel';
 interface DriveImportPanelProps {
   onImport: (records: JsonRecord[], mode: 'replace' | 'append', metadata?: ImportMetadata) => void;
 }
-
-type DriveMode = 'automatic' | 'manual';
 
 type Status = {
   tone: 'success' | 'warning' | 'error';
@@ -27,7 +25,6 @@ function formatModifiedTime(value?: string): string {
 }
 
 export const DriveImportPanel: React.FC<DriveImportPanelProps> = ({ onImport }) => {
-  const [mode, setMode] = useState<DriveMode>('automatic');
   const [importMode, setImportMode] = useState<'replace' | 'append'>('replace');
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [selectedFileId, setSelectedFileId] = useState('');
@@ -59,28 +56,23 @@ export const DriveImportPanel: React.FC<DriveImportPanelProps> = ({ onImport }) 
     });
   };
 
-  const refreshFiles = async (automatic: boolean) => {
+  const refreshFiles = async () => {
     setIsLoading(true);
     setStatus(null);
 
     try {
       const availableFiles = await listDriveJsonFiles(accessToken);
       setFiles(availableFiles);
+      setSelectedFileId((currentId) =>
+        availableFiles.some((file) => file.id === currentId) ? currentId : availableFiles[0]?.id ?? ''
+      );
 
       if (availableFiles.length === 0) {
         setStatus({ tone: 'warning', message: 'Aucun fichier JSON disponible dans le dossier Drive.' });
-        return;
-      }
-
-      const fileId = automatic ? availableFiles[0].id : selectedFileId || availableFiles[0].id;
-      setSelectedFileId(fileId);
-
-      if (automatic) {
-        await loadFile(fileId, availableFiles);
       } else {
         setStatus({
           tone: 'success',
-          message: `${availableFiles.length} fichier(s) JSON disponible(s). Sélectionne celui à afficher.`,
+          message: `${availableFiles.length} fichier(s) JSON disponible(s). Sélectionne un fichier puis choisis l’action à effectuer.`,
         });
       }
     } catch (error: unknown) {
@@ -93,14 +85,11 @@ export const DriveImportPanel: React.FC<DriveImportPanelProps> = ({ onImport }) 
     }
   };
 
-  useEffect(() => {
-    void refreshFiles(mode === 'automatic');
-    // Le changement de mode ou la connexion OAuth déclenche une nouvelle lecture.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, accessToken]);
-
   const handleManualLoad = async () => {
     if (!selectedFileId) return;
+    if (importMode === 'replace' && !window.confirm('Remplacer les données actuelles par le contenu de ce fichier Drive ? Les données présentes dans IndexedDB seront remplacées.')) {
+      return;
+    }
     setIsLoading(true);
     setStatus(null);
     try {
@@ -123,7 +112,7 @@ export const DriveImportPanel: React.FC<DriveImportPanelProps> = ({ onImport }) 
 
   return (
     <section className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md rounded-xl border border-slate-200/80 dark:border-slate-800/80 shadow-xs p-4 sm:p-5 space-y-4" aria-labelledby="drive-import-title">
-      <GoogleDriveLoginPanel onSignedIn={() => void refreshFiles(mode === 'automatic')} />
+      <GoogleDriveLoginPanel onSignedIn={() => void refreshFiles()} />
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3">
@@ -135,63 +124,48 @@ export const DriveImportPanel: React.FC<DriveImportPanelProps> = ({ onImport }) 
               Lecture Google Drive
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Synchronise le dossier public ou choisis précisément le fichier JSON à afficher.
+              Actualise la liste des fichiers, puis choisis précisément le JSON à importer.
             </p>
           </div>
         </div>
         <button
           type="button"
-          onClick={() => void refreshFiles(mode === 'automatic')}
+          onClick={() => void refreshFiles()}
           disabled={isLoading}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 cursor-pointer"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-          Actualiser
+          Actualiser la liste
         </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <label className={`p-3 rounded-xl border cursor-pointer text-xs flex flex-col gap-1 transition-all ${mode === 'automatic' ? 'border-blue-600 bg-blue-50/60 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
-          <span className="flex items-center gap-2 font-bold">
-            <input type="radio" name="drive-mode" checked={mode === 'automatic'} onChange={() => setMode('automatic')} className="text-blue-600" />
-            Automatique
-          </span>
-          <span className="text-[11px] opacity-80">Charge le fichier JSON le plus récemment modifié.</span>
-        </label>
-        <label className={`p-3 rounded-xl border cursor-pointer text-xs flex flex-col gap-1 transition-all ${mode === 'manual' ? 'border-blue-600 bg-blue-50/60 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}>
-          <span className="flex items-center gap-2 font-bold">
-            <input type="radio" name="drive-mode" checked={mode === 'manual'} onChange={() => setMode('manual')} className="text-blue-600" />
-            Manuel
-          </span>
-          <span className="text-[11px] opacity-80">Liste les fichiers pour choisir lequel afficher.</span>
-        </label>
+      <div className="rounded-lg border border-blue-100 bg-blue-50/60 dark:border-blue-900 dark:bg-blue-950/30 p-3 text-xs text-blue-900 dark:text-blue-200">
+        La liste Drive est chargée uniquement après une action volontaire. Tes données IndexedDB ne sont jamais remplacées au démarrage.
       </div>
 
-      {mode === 'manual' && (
-        <div className="flex flex-wrap items-end gap-2">
-          <label htmlFor="drive-file-select" className="flex-1 min-w-[220px] space-y-1">
-            <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500 dark:text-slate-400">Fichier JSON</span>
-            <select
-              id="drive-file-select"
-              value={selectedFileId}
-              onChange={(event) => setSelectedFileId(event.target.value)}
-              disabled={isLoading || files.length === 0}
-              className="w-full text-xs font-medium px-3 py-2 bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-            >
-              {files.length === 0 ? <option value="">Aucun fichier JSON</option> : files.map((file) => <option key={file.id} value={file.id}>{file.name} — {formatModifiedTime(file.modifiedTime)}</option>)}
-            </select>
-          </label>
-          <button
-            type="button"
-            onClick={() => void handleManualLoad()}
-            disabled={isLoading || !selectedFileId}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg cursor-pointer"
+      <div className="flex flex-wrap items-end gap-2">
+        <label htmlFor="drive-file-select" className="flex-1 min-w-[220px] space-y-1">
+          <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500 dark:text-slate-400">Fichier JSON</span>
+          <select
+            id="drive-file-select"
+            value={selectedFileId}
+            onChange={(event) => setSelectedFileId(event.target.value)}
+            disabled={isLoading || files.length === 0}
+            className="w-full text-xs font-medium px-3 py-2 bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
           >
-            <CloudDownload className="w-3.5 h-3.5" />
-            Charger ce fichier
-          </button>
-        </div>
-      )}
+            {files.length === 0 ? <option value="">Clique sur « Actualiser la liste »</option> : files.map((file) => <option key={file.id} value={file.id}>{file.name} — {formatModifiedTime(file.modifiedTime)}</option>)}
+          </select>
+        </label>
+        <button
+          type="button"
+          onClick={() => void handleManualLoad()}
+          disabled={isLoading || !selectedFileId}
+          className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg cursor-pointer"
+        >
+          <CloudDownload className="w-3.5 h-3.5" />
+          Charger ce fichier
+        </button>
+      </div>
 
       <div className="flex flex-wrap items-center gap-3">
         <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500 dark:text-slate-400">Après lecture :</span>
