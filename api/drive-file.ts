@@ -10,9 +10,13 @@ interface ApiResponse {
 }
 
 interface DriveFileResponse {
-  id?: string;
-  name?: string;
-  mimeType?: string;
+  id: string;
+  name: string;
+  mimeType: string;
+}
+
+interface DriveFileListResponse {
+  files?: DriveFileResponse[];
 }
 
 function getDriveConfig(): { apiKey: string; folderId: string } | null {
@@ -43,25 +47,25 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
     return;
   }
 
-  const metadataUrl = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}`);
-  metadataUrl.searchParams.set('fields', 'id,name,mimeType');
-  metadataUrl.searchParams.set('key', config.apiKey);
-
   try {
-    const metadataResponse = await fetch(metadataUrl);
-    if (!metadataResponse.ok) {
-      res.status(502).json({ error: `Google Drive a répondu avec le statut ${metadataResponse.status}.` });
+    const folderFilesUrl = new URL('https://www.googleapis.com/drive/v3/files');
+    folderFilesUrl.searchParams.set(
+      'q',
+      `'${config.folderId}' in parents and trashed = false and mimeType = 'application/json'`
+    );
+    folderFilesUrl.searchParams.set('pageSize', '100');
+    folderFilesUrl.searchParams.set('fields', 'files(id,name,mimeType)');
+    folderFilesUrl.searchParams.set('key', config.apiKey);
+
+    const folderFilesResponse = await fetch(folderFilesUrl);
+    if (!folderFilesResponse.ok) {
+      res.status(502).json({ error: `Google Drive a répondu avec le statut ${folderFilesResponse.status}.` });
       return;
     }
 
-    const metadata = (await metadataResponse.json()) as DriveFileResponse;
-    if (metadata.mimeType !== 'application/json') {
-      res.status(400).json({ error: 'Le fichier sélectionné n’est pas un fichier JSON.' });
-      return;
-    }
-
-    const isInConfiguredFolder = await verifyFileParent(fileId, config);
-    if (!isInConfiguredFolder) {
+    const folderFiles = (await folderFilesResponse.json()) as DriveFileListResponse;
+    const metadata = folderFiles.files?.find((file) => file.id === fileId);
+    if (!metadata) {
       res.status(403).json({ error: 'Le fichier ne se trouve pas dans le dossier Drive configuré.' });
       return;
     }
@@ -76,19 +80,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
     }
 
     const content = await contentResponse.json();
-    res.status(200).json({ name: metadata.name ?? 'fichier.json', content });
+    res.status(200).json({ name: metadata.name, content });
   } catch {
     res.status(502).json({ error: 'Impossible de télécharger le JSON depuis Google Drive.' });
   }
-}
-
-async function verifyFileParent(fileId: string, config: { apiKey: string; folderId: string }): Promise<boolean> {
-  const url = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}`);
-  url.searchParams.set('fields', 'parents');
-  url.searchParams.set('key', config.apiKey);
-
-  const response = await fetch(url);
-  if (!response.ok) return false;
-  const data = (await response.json()) as { parents?: string[] };
-  return data.parents?.includes(config.folderId) ?? false;
 }
