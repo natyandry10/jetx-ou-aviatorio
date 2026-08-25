@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { JsonRecord } from '../types';
-import { createRecordId } from '../utils/storage';
-import { Upload, FileCode, CheckCircle2, AlertTriangle, X, FileText } from 'lucide-react';
+import { parseJsonRecords } from '../utils/recordParser';
+import { Upload, FileCode, CheckCircle2, AlertTriangle, X } from 'lucide-react';
 
 interface ImportModalProps {
   isOpen: boolean;
@@ -22,52 +22,19 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
 
   const processJsonString = (content: string) => {
     setErrorMsg(null);
+    setParsedPreview(null);
+
+    if (content.trim() === '') return;
+
     try {
       const parsed = JSON.parse(content);
-      if (!Array.isArray(parsed)) {
-        throw new Error("Le fichier JSON doit contenir une liste (tableau `[...]`) d'objets.");
+      const result = parseJsonRecords(parsed, 'Le JSON');
+      setParsedPreview(result.records);
+      if (result.warnings.length > 0) {
+        setErrorMsg(result.warnings.join(' '));
       }
-
-      if (parsed.length === 0) {
-        throw new Error('Le fichier JSON est vide (0 élément).');
-      }
-
-      // Validate & map items
-      const validRecords: JsonRecord[] = parsed.map((item, idx) => {
-        if (typeof item !== 'object' || item === null || Array.isArray(item)) {
-          throw new Error(`L'élément à l'index ${idx} n'est pas un objet valide.`);
-        }
-
-        const source = item as Record<string, unknown>;
-        const dateBrute = source.date_brute ?? source.date ?? source.timestamp;
-        const dateUtc = source.date_utc ?? source.utc ?? dateBrute;
-        const coefficientValue = source.coefficient ?? source.multiplier ?? source.coeff;
-        const hash = source.hash ?? source.sha256;
-        const coefficient = Number(coefficientValue);
-
-        if (typeof dateBrute !== 'string' || dateBrute.trim() === '') {
-          throw new Error(`L'élément à l'index ${idx} doit contenir une date_brute valide.`);
-        }
-        if (!Number.isFinite(coefficient)) {
-          throw new Error(`L'élément à l'index ${idx} doit contenir un coefficient numérique valide.`);
-        }
-        if (typeof hash !== 'string' || hash.trim() === '') {
-          throw new Error(`L'élément à l'index ${idx} doit contenir un hash SHA-256 valide.`);
-        }
-
-        return {
-          id: createRecordId('imported'),
-          date_brute: dateBrute,
-          date_utc: typeof dateUtc === 'string' && dateUtc.trim() !== '' ? dateUtc : dateBrute,
-          coefficient,
-          hash,
-        };
-      });
-
-      setParsedPreview(validRecords);
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'Erreur lors de la lecture du JSON.');
-      setParsedPreview(null);
     }
   };
 

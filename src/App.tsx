@@ -217,6 +217,7 @@ export default function App() {
             onDeleteRecord={handleDeleteRecord}
             onOpenImport={() => setIsImportOpen(true)}
             onOpenExport={() => setIsExportOpen(true)}
+            onImportRecords={handleImportRecords}
             onRestoreInitialData={handleRestoreInitialData}
           />
         )}
