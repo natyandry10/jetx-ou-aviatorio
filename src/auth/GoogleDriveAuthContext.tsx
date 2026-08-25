@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 
 const GOOGLE_IDENTITY_SCRIPT = 'https://accounts.google.com/gsi/client';
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
+const DEFAULT_GOOGLE_CLIENT_ID = '559702392895-a1ldmckihnjeu6r67e9mbifli0371mt2.apps.googleusercontent.com';
 
 interface GoogleTokenResponse {
   access_token?: string;
@@ -43,7 +44,7 @@ interface GoogleDriveAuthContextValue {
 const GoogleDriveAuthContext = createContext<GoogleDriveAuthContextValue | null>(null);
 
 function getClientId(): string {
-  return import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() ?? '';
+  return import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() || DEFAULT_GOOGLE_CLIENT_ID;
 }
 
 function loadGoogleIdentityScript(): Promise<void> {
@@ -91,7 +92,7 @@ export const GoogleDriveAuthProvider: React.FC<React.PropsWithChildren> = ({ chi
 
   const signIn = useCallback(async (): Promise<string | null> => {
     if (!clientId) {
-      const message = 'Connexion Google non configurée : ajoutez VITE_GOOGLE_CLIENT_ID dans Vercel.';
+      const message = 'Connexion Google non configurée. Vérifiez le Client ID OAuth et les origines autorisées dans Google Cloud.';
       setError(message);
       return null;
     }
