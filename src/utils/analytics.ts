@@ -40,6 +40,13 @@ export interface AnalyticsPeriod {
   endDate?: string;
 }
 
+export interface AnalyticsPreferences {
+  period: AnalyticsPeriod;
+  scale: 'linear' | 'logarithmic';
+  comparisonFileAId?: string;
+  comparisonFileBId?: string;
+}
+
 function getValidTimestamp(record: JsonRecord): number | null {
   const timestamp = new Date(record.date_utc || record.date_brute).getTime();
   return Number.isFinite(timestamp) ? timestamp : null;

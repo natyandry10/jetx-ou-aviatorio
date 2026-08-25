@@ -21,9 +21,15 @@ interface DriveFileContentResponse {
 }
 
 async function readJsonResponse<T>(response: Response): Promise<T> {
-  const data = (await response.json()) as T & { error?: string };
+  let data: (T & { error?: string }) | null = null;
+  try {
+    data = (await response.json()) as T & { error?: string };
+  } catch {
+    throw new Error('Le service Drive est indisponible dans cet environnement. Utilise une prévisualisation ou la production Vercel pour tester la comparaison.');
+  }
+
   if (!response.ok) {
-    throw new Error(data.error ?? `La requête Drive a échoué (${response.status}).`);
+    throw new Error(data?.error ?? `La requête Drive a échoué (${response.status}).`);
   }
   return data;
 }

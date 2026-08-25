@@ -1,16 +1,19 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Activity, BarChart3, CalendarDays, Clock3, Info, Scale, TrendingUp } from 'lucide-react';
 import { JsonRecord } from '../types';
 import { AdvancedStatsPanel } from './AdvancedStatsPanel';
+import { DriveComparisonPanel } from './DriveComparisonPanel';
 import {
   AnalyticsPeriod,
   AnalyticsPeriodPreset,
+  AnalyticsPreferences,
   buildHourlyStats,
   buildTimeSeries,
   filterRecordsByPeriod,
   formatHour,
   getTopHourlyStats,
 } from '../utils/analytics';
+import { loadAnalyticsPreferences, persistAnalyticsPreferences } from '../utils/storage';
 
 interface AnalyticsChartsProps {
   records: JsonRecord[];
@@ -37,9 +40,39 @@ const periodOptions: Array<{ value: AnalyticsPeriodPreset; label: string }> = [
   { value: 'custom', label: 'Période personnalisée' },
 ];
 
+const DEFAULT_ANALYTICS_PREFERENCES: AnalyticsPreferences = {
+  period: { preset: 'all' },
+  scale: 'linear',
+};
+
 export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ records }) => {
-  const [period, setPeriod] = useState<AnalyticsPeriod>({ preset: 'all' });
-  const [scale, setScale] = useState<'linear' | 'logarithmic'>('linear');
+  const [preferences, setPreferences] = useState<AnalyticsPreferences>(() => loadAnalyticsPreferences(DEFAULT_ANALYTICS_PREFERENCES));
+  const period = preferences.period;
+  const scale = preferences.scale;
+
+  useEffect(() => {
+    persistAnalyticsPreferences(preferences);
+  }, [preferences]);
+
+  const handlePeriodChange = (preset: AnalyticsPeriodPreset) => {
+    setPreferences((current) => ({
+      ...current,
+      period: preset === 'custom'
+        ? { preset, startDate: current.period.startDate, endDate: current.period.endDate }
+        : { preset },
+    }));
+  };
+
+  const handleCustomDateChange = (field: 'startDate' | 'endDate', value: string) => {
+    setPreferences((current) => ({ ...current, period: { ...current.period, [field]: value || undefined } }));
+  };
+
+  const handleComparisonSelectionChange = useCallback((fileAId: string, fileBId: string) => {
+    setPreferences((current) => {
+      if (current.comparisonFileAId === fileAId && current.comparisonFileBId === fileBId) return current;
+      return { ...current, comparisonFileAId: fileAId || undefined, comparisonFileBId: fileBId || undefined };
+    });
+  }, []);
 
   const periodRecords = useMemo(() => filterRecordsByPeriod(records, period), [records, period]);
   const timeSeries = useMemo(() => buildTimeSeries(periodRecords), [periodRecords]);
@@ -105,7 +138,7 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ records }) => 
             <select
               id="analytics-period"
               value={period.preset}
-              onChange={(event) => setPeriod((current) => ({ ...current, preset: event.target.value as AnalyticsPeriodPreset }))}
+              onChange={(event) => handlePeriodChange(event.target.value as AnalyticsPeriodPreset)}
               className="bg-transparent text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none"
             >
               {periodOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
@@ -113,7 +146,7 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ records }) => 
           </div>
           <button
             type="button"
-            onClick={() => setScale((current) => current === 'linear' ? 'logarithmic' : 'linear')}
+            onClick={() => setPreferences((current) => ({ ...current, scale: current.scale === 'linear' ? 'logarithmic' : 'linear' }))}
             aria-pressed={scale === 'logarithmic'}
             className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors ${scale === 'logarithmic' ? 'border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300' : 'border-slate-200 bg-white/80 text-slate-700 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-200'}`}
           >
@@ -127,11 +160,11 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ records }) => 
         <div className="flex flex-wrap items-end gap-3 rounded-xl border border-indigo-100 dark:border-indigo-900/60 bg-indigo-50/60 dark:bg-indigo-950/30 p-3">
           <label className="space-y-1 text-xs font-semibold text-slate-700 dark:text-slate-300">
             <span className="block text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">Du</span>
-            <input type="date" value={period.startDate ?? ''} onChange={(event) => setPeriod((current) => ({ ...current, startDate: event.target.value }))} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-xs outline-none focus:ring-2 focus:ring-indigo-500" />
+            <input type="date" value={period.startDate ?? ''} onChange={(event) => handleCustomDateChange('startDate', event.target.value)} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-xs outline-none focus:ring-2 focus:ring-indigo-500" />
           </label>
           <label className="space-y-1 text-xs font-semibold text-slate-700 dark:text-slate-300">
             <span className="block text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">Au</span>
-            <input type="date" value={period.endDate ?? ''} onChange={(event) => setPeriod((current) => ({ ...current, endDate: event.target.value }))} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-xs outline-none focus:ring-2 focus:ring-indigo-500" />
+            <input type="date" value={period.endDate ?? ''} onChange={(event) => handleCustomDateChange('endDate', event.target.value)} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-xs outline-none focus:ring-2 focus:ring-indigo-500" />
           </label>
           <span className="text-[11px] text-slate-500 dark:text-slate-400">Laissez une borne vide pour utiliser une seule limite.</span>
         </div>
@@ -193,6 +226,12 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ records }) => 
       </section>
 
       <AdvancedStatsPanel records={records} period={period} />
+
+      <DriveComparisonPanel
+        initialFileAId={preferences.comparisonFileAId}
+        initialFileBId={preferences.comparisonFileBId}
+        onSelectionChange={handleComparisonSelectionChange}
+      />
 
       <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-850 p-5 sm:p-6 shadow-xs" aria-labelledby="hourly-analysis-title">
         <div className="flex flex-wrap items-start justify-between gap-3">
