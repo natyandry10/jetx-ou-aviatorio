@@ -266,6 +266,21 @@ export interface SequencePositionSummary {
   median: number;
   p90: number;
   maximum: number;
+  intervalSampleCount: number;
+  intervalMeanSeconds: number;
+  intervalMedianSeconds: number;
+  intervalMinSeconds: number;
+  intervalMaxSeconds: number;
+}
+
+export interface SequenceDisplayStep {
+  timestamp: string;
+  coefficient: number;
+  intervalSeconds: number | null;
+}
+
+export interface SequenceDisplayExample {
+  steps: SequenceDisplayStep[];
 }
 
 export interface SequenceTemporalSummary {
@@ -290,6 +305,7 @@ export interface SequencePatternResult {
   lastOccurrenceAt: string;
   nextByPosition: SequencePositionSummary[];
   temporal: Record<SequenceTemporalGranularity, SequenceTemporalSummary[]>;
+  examples: SequenceDisplayExample[];
 }
 
 export interface SequenceConditionalSummary {
@@ -299,6 +315,7 @@ export interface SequenceConditionalSummary {
   occurrences: number;
   nextByPosition: SequencePositionSummary[];
   temporal: Record<SequenceTemporalGranularity, SequenceTemporalSummary[]>;
+  examples: SequenceDisplayExample[];
 }
 
 export interface SequenceScannerResult {
@@ -310,6 +327,9 @@ export interface SequenceScannerResult {
 
 interface SequenceOccurrence {
   timestamp: number;
+  endTimestamp: number;
+  sequenceRecords: JsonRecord[];
+  sequenceTimestamps: number[];
   nextRecords: JsonRecord[];
 }
 
@@ -353,20 +373,29 @@ function formatSequenceTimestamp(timestamp: number, granularity: SequenceTempora
   return { key, label: key };
 }
 
-function summarizeSequenceValues(values: number[], targetThreshold: number, position: number): SequencePositionSummary {
+function summarizeSequenceValues(values: number[], targetThreshold: number, position: number, intervals: number[] = []): SequencePositionSummary {
   const sorted = [...values].sort((a, b) => a - b);
+  const validIntervals = intervals.filter((value) => Number.isFinite(value) && value >= 0).sort((a, b) => a - b);
   const sampleCount = sorted.length;
+  const emptyIntervals = { intervalSampleCount: validIntervals.length, intervalMeanSeconds: 0, intervalMedianSeconds: 0, intervalMinSeconds: 0, intervalMaxSeconds: 0 };
   if (sampleCount === 0) {
-    return { position, sampleCount: 0, aboveTargetCount: 0, aboveTargetRate: 0, aboveTenCount: 0, aboveTenRate: 0, mean: 0, median: 0, p90: 0, maximum: 0 };
+    return { position, sampleCount: 0, aboveTargetCount: 0, aboveTargetRate: 0, aboveTenCount: 0, aboveTenRate: 0, mean: 0, median: 0, p90: 0, maximum: 0, ...emptyIntervals };
   }
-  const percentile = (ratio: number): number => {
-    const index = (sorted.length - 1) * ratio;
+  const percentile = (sortedValues: number[], ratio: number): number => {
+    const index = (sortedValues.length - 1) * ratio;
     const lower = Math.floor(index);
     const upper = Math.ceil(index);
-    return lower === upper ? sorted[lower] : sorted[lower] + (sorted[upper] - sorted[lower]) * (index - lower);
+    return lower === upper ? sortedValues[lower] : sortedValues[lower] + (sortedValues[upper] - sortedValues[lower]) * (index - lower);
   };
   const aboveTargetCount = sorted.filter((value) => value > targetThreshold).length;
   const aboveTenCount = sorted.filter((value) => value > 10).length;
+  const intervalSummary = validIntervals.length > 0 ? {
+    intervalSampleCount: validIntervals.length,
+    intervalMeanSeconds: validIntervals.reduce((sum, value) => sum + value, 0) / validIntervals.length,
+    intervalMedianSeconds: percentile(validIntervals, 0.5),
+    intervalMinSeconds: validIntervals[0],
+    intervalMaxSeconds: validIntervals[validIntervals.length - 1],
+  } : emptyIntervals;
   return {
     position,
     sampleCount,
@@ -375,20 +404,46 @@ function summarizeSequenceValues(values: number[], targetThreshold: number, posi
     aboveTenCount,
     aboveTenRate: aboveTenCount / sampleCount,
     mean: sorted.reduce((sum, value) => sum + value, 0) / sampleCount,
-    median: percentile(0.5),
-    p90: percentile(0.9),
+    median: percentile(sorted, 0.5),
+    p90: percentile(sorted, 0.9),
     maximum: sorted[sorted.length - 1],
+    ...intervalSummary,
   };
+}
+
+function buildSequenceExamples(occurrences: SequenceOccurrence[], includeFirstFollowingResult = false, limit = 6): SequenceDisplayExample[] {
+  return occurrences.slice(0, limit).map((occurrence) => {
+    const records = includeFirstFollowingResult ? [...occurrence.sequenceRecords, ...occurrence.nextRecords.slice(0, 1)] : occurrence.sequenceRecords;
+    const timestamps = includeFirstFollowingResult ? [...occurrence.sequenceTimestamps, ...occurrence.nextRecords.slice(0, 1).map((record) => getValidTimestamp(record)).filter((timestamp): timestamp is number => timestamp !== null)] : occurrence.sequenceTimestamps;
+    return {
+      steps: records.map((record, index) => ({
+        timestamp: new Date(timestamps[index]).toISOString(),
+        coefficient: record.coefficient,
+        intervalSeconds: index > 0 && timestamps[index] !== undefined ? Math.max(0, (timestamps[index] - timestamps[index - 1]) / 1000) : null,
+      })),
+    };
+  });
+}
+
+function summarizeFollowingPositions(occurrences: SequenceOccurrence[], config: SequenceScannerConfig, targetThreshold: number): SequencePositionSummary[] {
+  return Array.from({ length: config.lookahead }, (_, index) => {
+    const values: number[] = [];
+    const intervals: number[] = [];
+    occurrences.forEach((occurrence) => {
+      const record = occurrence.nextRecords[index];
+      const timestamp = record ? getValidTimestamp(record) : null;
+      if (record && Number.isFinite(record.coefficient) && timestamp !== null) {
+        values.push(record.coefficient);
+        intervals.push(Math.max(0, (timestamp - occurrence.endTimestamp) / 1000));
+      }
+    });
+    return summarizeSequenceValues(values, targetThreshold, index + 1, intervals);
+  });
 }
 
 function finalizeSequencePattern(pattern: MutableSequencePattern, config: SequenceScannerConfig): SequencePatternResult {
   const timestamps = pattern.occurrences.map((occurrence) => occurrence.timestamp).sort((a, b) => a - b);
-  const nextByPosition = Array.from({ length: config.lookahead }, (_, index) => {
-    const values = pattern.occurrences
-      .map((occurrence) => occurrence.nextRecords[index]?.coefficient)
-      .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
-    return summarizeSequenceValues(values, config.targetThreshold, index + 1);
-  });
+  const nextByPosition = summarizeFollowingPositions(pattern.occurrences, config, config.targetThreshold);
   const temporal = {} as Record<SequenceTemporalGranularity, SequenceTemporalSummary[]>;
   (['hour', 'day', 'month', 'year'] as SequenceTemporalGranularity[]).forEach((granularity) => {
     const buckets = new Map<string, { label: string; occurrences: number; nextEvaluatedCount: number; aboveTargetCount: number; aboveTenCount: number }>();
@@ -429,6 +484,7 @@ function finalizeSequencePattern(pattern: MutableSequencePattern, config: Sequen
     lastOccurrenceAt: new Date(timestamps[timestamps.length - 1]).toISOString(),
     nextByPosition,
     temporal,
+    examples: buildSequenceExamples(pattern.occurrences, true),
   };
 }
 
@@ -453,6 +509,9 @@ export function scanConditionalSequences(records: JsonRecord[], inputConfig: Par
   const addOccurrence = (pattern: MutableSequencePattern, startIndex: number, nextStartIndex: number) => {
     pattern.occurrences.push({
       timestamp: timestamps[startIndex],
+      endTimestamp: timestamps[nextStartIndex - 1] ?? timestamps[startIndex],
+      sequenceRecords: ordered.slice(startIndex, nextStartIndex),
+      sequenceTimestamps: timestamps.slice(startIndex, nextStartIndex),
       nextRecords: ordered.slice(nextStartIndex, nextStartIndex + config.lookahead),
     });
   };
@@ -501,7 +560,7 @@ export function scanConditionalSequences(records: JsonRecord[], inputConfig: Par
   const threeSmallOccurrences: SequenceOccurrence[] = [];
   for (let start = 0; start + 3 < ordered.length; start += 1) {
     if (ordered.slice(start, start + 3).every((record) => record.coefficient <= config.lowThreshold)) {
-      threeSmallOccurrences.push({ timestamp: timestamps[start], nextRecords: ordered.slice(start + 3, start + 3 + config.lookahead) });
+      threeSmallOccurrences.push({ timestamp: timestamps[start], endTimestamp: timestamps[start + 2], sequenceRecords: ordered.slice(start, start + 3), sequenceTimestamps: timestamps.slice(start, start + 3), nextRecords: ordered.slice(start + 3, start + 3 + config.lookahead) });
     }
   }
   const threeSmallToAboveTen = finalizeConditionalSummary(threeSmallOccurrences, 3, config.lowThreshold, 10, config.lookahead);
@@ -515,12 +574,7 @@ export function scanConditionalSequences(records: JsonRecord[], inputConfig: Par
 }
 
 function finalizeConditionalSummary(occurrences: SequenceOccurrence[], sequenceLength: number, lowThreshold: number, targetThreshold: number, lookahead: number): SequenceConditionalSummary {
-  const nextByPosition = Array.from({ length: lookahead }, (_, index) => {
-    const values = occurrences
-      .map((occurrence) => occurrence.nextRecords[index]?.coefficient)
-      .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
-    return summarizeSequenceValues(values, targetThreshold, index + 1);
-  });
+  const nextByPosition = summarizeFollowingPositions(occurrences, { lookahead, minLength: sequenceLength, maxLength: sequenceLength, lowThreshold, triggerThreshold: targetThreshold, targetThreshold, exactPrecision: 2 }, targetThreshold);
   const temporal = {} as Record<SequenceTemporalGranularity, SequenceTemporalSummary[]>;
   (['hour', 'day', 'month', 'year'] as SequenceTemporalGranularity[]).forEach((granularity) => {
     const buckets = new Map<string, { label: string; occurrences: number; nextEvaluatedCount: number; aboveTargetCount: number; aboveTenCount: number }>();
@@ -549,5 +603,5 @@ function finalizeConditionalSummary(occurrences: SequenceOccurrence[], sequenceL
         aboveTenRate: value.nextEvaluatedCount > 0 ? value.aboveTenCount / value.nextEvaluatedCount : 0,
       }));
   });
-  return { sequenceLength, lowThreshold, targetThreshold, occurrences: occurrences.length, nextByPosition, temporal };
+  return { sequenceLength, lowThreshold, targetThreshold, occurrences: occurrences.length, nextByPosition, temporal, examples: buildSequenceExamples(occurrences, true) };
 }

@@ -4,6 +4,8 @@ import { JsonRecord } from '../types';
 import {
   DEFAULT_SEQUENCE_SCANNER_CONFIG,
   SequenceAnalysisMode,
+  SequenceDisplayExample,
+  SequenceDisplayStep,
   SequencePatternResult,
   SequenceScannerConfig,
   SequenceTemporalGranularity,
@@ -27,6 +29,39 @@ function formatValue(value: number): string {
 
 function formatRate(rate: number): string {
   return `${(rate * 100).toFixed(1)}%`;
+}
+
+function formatInterval(seconds: number | null): string {
+  if (seconds === null || !Number.isFinite(seconds)) return 'début';
+  if (seconds < 60) return `${Math.round(seconds)} s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.round(seconds % 60);
+  return remainingSeconds === 0 ? `${minutes} min` : `${minutes} min ${remainingSeconds} s`;
+}
+
+function coefficientStyle(coefficient: number): { className: string; label: string } {
+  if (coefficient > 10) return { className: 'border-rose-300 bg-rose-100 text-rose-800 dark:border-rose-800 dark:bg-rose-950/60 dark:text-rose-200', label: '>10x' };
+  if (coefficient >= 4) return { className: 'border-violet-300 bg-violet-100 text-violet-800 dark:border-violet-800 dark:bg-violet-950/60 dark:text-violet-200', label: '4–10x' };
+  if (coefficient > 1.45) return { className: 'border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200', label: '1,46–4x' };
+  return { className: 'border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200', label: '≤1,45x' };
+}
+
+function SequenceRail({ example }: { example: SequenceDisplayExample }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5" aria-label="Séquence chronologique colorée">
+      {example.steps.map((step: SequenceDisplayStep, index) => {
+        const style = coefficientStyle(step.coefficient);
+        return (
+          <React.Fragment key={`${step.timestamp}-${index}`}>
+            {index > 0 && <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500" title="Intervalle entre les résultats">— {formatInterval(step.intervalSeconds)} →</span>}
+            <span title={`${style.label} · ${formatDate(step.timestamp)}`} className={`inline-flex items-center rounded-md border px-2 py-1 text-[11px] font-bold ${style.className}`}>
+              {step.coefficient.toFixed(2)}x
+            </span>
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
 }
 
 function formatDate(value: string): string {
@@ -124,8 +159,9 @@ export const SequenceScannerPanel: React.FC<SequenceScannerPanelProps> = ({ reco
           <span className="text-[10px] text-amber-700 dark:text-amber-300">{threeSmallSummary.occurrences} séquence(s)</span>
         </div>
         <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2">
-          {threeSmallSummary.nextByPosition.map((position) => <div key={position.position} className="rounded-lg border border-amber-200/80 dark:border-amber-800/70 bg-white/70 dark:bg-slate-900/50 p-2.5"><p className="text-[10px] font-bold text-slate-500 dark:text-slate-400">Position +{position.position}</p><p className="mt-1 text-sm font-bold text-amber-700 dark:text-amber-300">{formatRate(position.aboveTenRate)} &gt; 10x</p><p className="text-[10px] text-slate-500 dark:text-slate-400">{position.aboveTenCount}/{position.sampleCount} observé(s) · méd. {formatValue(position.median)}</p></div>)}
+          {threeSmallSummary.nextByPosition.map((position) => <div key={position.position} className="rounded-lg border border-amber-200/80 dark:border-amber-800/70 bg-white/70 dark:bg-slate-900/50 p-2.5"><p className="text-[10px] font-bold text-slate-500 dark:text-slate-400">Position +{position.position}</p><p className="mt-1 text-sm font-bold text-amber-700 dark:text-amber-300">{formatRate(position.aboveTenRate)} &gt; 10x</p><p className="text-[10px] text-slate-500 dark:text-slate-400">{position.aboveTenCount}/{position.sampleCount} observé(s) · méd. {formatValue(position.median)}</p><p className="text-[10px] text-slate-500 dark:text-slate-400">Écart moy. {formatInterval(position.intervalMeanSeconds)}</p></div>)}
         </div>
+        {threeSmallSummary.examples.length > 0 && <div className="mt-4 rounded-lg border border-amber-200/80 dark:border-amber-800/70 bg-white/60 dark:bg-slate-900/40 p-3 space-y-2"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-[10px] uppercase tracking-wider font-bold text-amber-800 dark:text-amber-300">Exemples de séquences observées</p><p className="text-[10px] text-slate-500 dark:text-slate-400">couleur = tranche · flèche = intervalle</p></div>{threeSmallSummary.examples.slice(0, 3).map((example, index) => <div key={index} className="overflow-x-auto"><SequenceRail example={example} /></div>)}</div>}
         {threeSmallFirstPosition?.sampleCount === 0 && <p className="mt-3 text-[11px] text-amber-800 dark:text-amber-300">Aucune séquence complète de trois petits multiplicateurs ne permet de calculer ce taux sur la période actuelle.</p>}
       </div>
 
@@ -149,6 +185,8 @@ export const SequenceScannerPanel: React.FC<SequenceScannerPanelProps> = ({ reco
                   {selectedPattern.nextByPosition.map((position) => <div key={position.position} className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5"><p className="text-[10px] font-bold text-slate-500 dark:text-slate-400">Position +{position.position}</p><p className="mt-1 text-xs font-bold text-indigo-700 dark:text-indigo-300">{formatRate(position.aboveTargetRate)} &gt; {formatValue(config.targetThreshold)}</p><p className="text-[10px] font-semibold text-amber-700 dark:text-amber-300">{formatRate(position.aboveTenRate)} &gt; 10x</p><p className="text-[10px] text-slate-500 dark:text-slate-400">n={position.sampleCount} · méd. {formatValue(position.median)}</p><p className="text-[10px] text-slate-500 dark:text-slate-400">P90 {formatValue(position.p90)} · max {formatValue(position.maximum)}</p></div>)}
                 </div>
               </div>
+
+              {selectedPattern.examples.length > 0 && <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/50 p-3 space-y-2"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-[10px] uppercase tracking-wider font-bold text-slate-600 dark:text-slate-300">Séquences observées</p><p className="text-[10px] text-slate-500 dark:text-slate-400">pastilles colorées · intervalles entre résultats</p></div>{selectedPattern.examples.slice(0, 4).map((example, index) => <div key={index} className="overflow-x-auto"><SequenceRail example={example} /></div>)}</div>}
 
               <div>
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-2"><p className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">Répartition temporelle — {granularityOptions.find((option) => option.value === granularity)?.label}</p><span className="text-[10px] text-slate-500 dark:text-slate-400">Résultat suivant uniquement</span></div>
