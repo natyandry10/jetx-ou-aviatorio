@@ -1,6 +1,7 @@
 import React from 'react';
 import { JsonRecord } from '../types';
 import { formatDateFrench, getCoefficientBadgeStyle } from '../utils/formatters';
+import { AnalyticsCharts } from './AnalyticsCharts';
 import { BarChart3, TrendingUp, Clock, Award, Layers, Hash } from 'lucide-react';
 
 interface StatsViewProps {
@@ -113,6 +114,8 @@ export const StatsView: React.FC<StatsViewProps> = ({ records, onNavigateToSaisi
           <p className="text-[11px] text-slate-400 mt-0.5">Multiplicateur plancher</p>
         </div>
       </div>
+
+      <AnalyticsCharts records={records} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Distribution Ranges */}
