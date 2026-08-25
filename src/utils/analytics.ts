@@ -14,9 +14,45 @@ export interface HourlyStat {
   maximum: number;
 }
 
+export type AnalyticsPeriodPreset = 'all' | '24h' | '7d' | '30d' | 'custom';
+
+export interface AnalyticsPeriod {
+  preset: AnalyticsPeriodPreset;
+  startDate?: string;
+  endDate?: string;
+}
+
 function getValidTimestamp(record: JsonRecord): number | null {
   const timestamp = new Date(record.date_utc || record.date_brute).getTime();
   return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+export function filterRecordsByPeriod(records: JsonRecord[], period: AnalyticsPeriod): JsonRecord[] {
+  if (period.preset === 'all') return records;
+
+  if (period.preset === 'custom') {
+    const start = period.startDate ? new Date(`${period.startDate}T00:00:00`).getTime() : -Infinity;
+    const end = period.endDate ? new Date(`${period.endDate}T23:59:59.999`).getTime() : Infinity;
+    return records.filter((record) => {
+      const timestamp = getValidTimestamp(record);
+      return timestamp !== null && timestamp >= start && timestamp <= end;
+    });
+  }
+
+  const durationByPreset: Record<'24h' | '7d' | '30d', number> = {
+    '24h': 24 * 60 * 60 * 1000,
+    '7d': 7 * 24 * 60 * 60 * 1000,
+    '30d': 30 * 24 * 60 * 60 * 1000,
+  };
+  const timestamps = records.map(getValidTimestamp).filter((timestamp): timestamp is number => timestamp !== null);
+  if (timestamps.length === 0) return [];
+
+  const latestTimestamp = Math.max(...timestamps);
+  const cutoff = latestTimestamp - durationByPreset[period.preset];
+  return records.filter((record) => {
+    const timestamp = getValidTimestamp(record);
+    return timestamp !== null && timestamp >= cutoff && timestamp <= latestTimestamp;
+  });
 }
 
 export function buildTimeSeries(records: JsonRecord[], maxPoints = 140): TimeSeriesPoint[] {
