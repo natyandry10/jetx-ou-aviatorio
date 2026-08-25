@@ -260,6 +260,8 @@ export interface SequencePositionSummary {
   sampleCount: number;
   aboveTargetCount: number;
   aboveTargetRate: number;
+  aboveTenCount: number;
+  aboveTenRate: number;
   mean: number;
   median: number;
   p90: number;
@@ -273,6 +275,8 @@ export interface SequenceTemporalSummary {
   nextEvaluatedCount: number;
   aboveTargetCount: number;
   aboveTargetRate: number;
+  aboveTenCount: number;
+  aboveTenRate: number;
 }
 
 export interface SequencePatternResult {
@@ -288,10 +292,20 @@ export interface SequencePatternResult {
   temporal: Record<SequenceTemporalGranularity, SequenceTemporalSummary[]>;
 }
 
+export interface SequenceConditionalSummary {
+  sequenceLength: number;
+  lowThreshold: number;
+  targetThreshold: number;
+  occurrences: number;
+  nextByPosition: SequencePositionSummary[];
+  temporal: Record<SequenceTemporalGranularity, SequenceTemporalSummary[]>;
+}
+
 export interface SequenceScannerResult {
   orderedValidCount: number;
   ignoredCount: number;
   patterns: SequencePatternResult[];
+  threeSmallToAboveTen: SequenceConditionalSummary;
 }
 
 interface SequenceOccurrence {
@@ -343,7 +357,7 @@ function summarizeSequenceValues(values: number[], targetThreshold: number, posi
   const sorted = [...values].sort((a, b) => a - b);
   const sampleCount = sorted.length;
   if (sampleCount === 0) {
-    return { position, sampleCount: 0, aboveTargetCount: 0, aboveTargetRate: 0, mean: 0, median: 0, p90: 0, maximum: 0 };
+    return { position, sampleCount: 0, aboveTargetCount: 0, aboveTargetRate: 0, aboveTenCount: 0, aboveTenRate: 0, mean: 0, median: 0, p90: 0, maximum: 0 };
   }
   const percentile = (ratio: number): number => {
     const index = (sorted.length - 1) * ratio;
@@ -352,11 +366,14 @@ function summarizeSequenceValues(values: number[], targetThreshold: number, posi
     return lower === upper ? sorted[lower] : sorted[lower] + (sorted[upper] - sorted[lower]) * (index - lower);
   };
   const aboveTargetCount = sorted.filter((value) => value > targetThreshold).length;
+  const aboveTenCount = sorted.filter((value) => value > 10).length;
   return {
     position,
     sampleCount,
     aboveTargetCount,
     aboveTargetRate: aboveTargetCount / sampleCount,
+    aboveTenCount,
+    aboveTenRate: aboveTenCount / sampleCount,
     mean: sorted.reduce((sum, value) => sum + value, 0) / sampleCount,
     median: percentile(0.5),
     p90: percentile(0.9),
@@ -374,15 +391,16 @@ function finalizeSequencePattern(pattern: MutableSequencePattern, config: Sequen
   });
   const temporal = {} as Record<SequenceTemporalGranularity, SequenceTemporalSummary[]>;
   (['hour', 'day', 'month', 'year'] as SequenceTemporalGranularity[]).forEach((granularity) => {
-    const buckets = new Map<string, { label: string; occurrences: number; nextEvaluatedCount: number; aboveTargetCount: number }>();
+    const buckets = new Map<string, { label: string; occurrences: number; nextEvaluatedCount: number; aboveTargetCount: number; aboveTenCount: number }>();
     pattern.occurrences.forEach((occurrence) => {
       const bucket = formatSequenceTimestamp(occurrence.timestamp, granularity);
-      const current = buckets.get(bucket.key) ?? { label: bucket.label, occurrences: 0, nextEvaluatedCount: 0, aboveTargetCount: 0 };
+      const current = buckets.get(bucket.key) ?? { label: bucket.label, occurrences: 0, nextEvaluatedCount: 0, aboveTargetCount: 0, aboveTenCount: 0 };
       current.occurrences += 1;
       const nextValue = occurrence.nextRecords[0]?.coefficient;
       if (typeof nextValue === 'number' && Number.isFinite(nextValue)) {
         current.nextEvaluatedCount += 1;
         if (nextValue > config.targetThreshold) current.aboveTargetCount += 1;
+        if (nextValue > 10) current.aboveTenCount += 1;
       }
       buckets.set(bucket.key, current);
     });
@@ -395,6 +413,8 @@ function finalizeSequencePattern(pattern: MutableSequencePattern, config: Sequen
         nextEvaluatedCount: value.nextEvaluatedCount,
         aboveTargetCount: value.aboveTargetCount,
         aboveTargetRate: value.nextEvaluatedCount > 0 ? value.aboveTargetCount / value.nextEvaluatedCount : 0,
+        aboveTenCount: value.aboveTenCount,
+        aboveTenRate: value.nextEvaluatedCount > 0 ? value.aboveTenCount / value.nextEvaluatedCount : 0,
       }));
   });
 
@@ -478,9 +498,56 @@ export function scanConditionalSequences(records: JsonRecord[], inputConfig: Par
     .map((pattern) => finalizeSequencePattern(pattern, config))
     .sort((left, right) => right.occurrences - left.occurrences || left.length - right.length || left.label.localeCompare(right.label));
 
+  const threeSmallOccurrences: SequenceOccurrence[] = [];
+  for (let start = 0; start + 3 < ordered.length; start += 1) {
+    if (ordered.slice(start, start + 3).every((record) => record.coefficient <= config.lowThreshold)) {
+      threeSmallOccurrences.push({ timestamp: timestamps[start], nextRecords: ordered.slice(start + 3, start + 3 + config.lookahead) });
+    }
+  }
+  const threeSmallToAboveTen = finalizeConditionalSummary(threeSmallOccurrences, 3, config.lowThreshold, 10, config.lookahead);
+
   return {
     orderedValidCount: ordered.length,
     ignoredCount: records.length - ordered.length,
     patterns,
+    threeSmallToAboveTen,
   };
+}
+
+function finalizeConditionalSummary(occurrences: SequenceOccurrence[], sequenceLength: number, lowThreshold: number, targetThreshold: number, lookahead: number): SequenceConditionalSummary {
+  const nextByPosition = Array.from({ length: lookahead }, (_, index) => {
+    const values = occurrences
+      .map((occurrence) => occurrence.nextRecords[index]?.coefficient)
+      .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+    return summarizeSequenceValues(values, targetThreshold, index + 1);
+  });
+  const temporal = {} as Record<SequenceTemporalGranularity, SequenceTemporalSummary[]>;
+  (['hour', 'day', 'month', 'year'] as SequenceTemporalGranularity[]).forEach((granularity) => {
+    const buckets = new Map<string, { label: string; occurrences: number; nextEvaluatedCount: number; aboveTargetCount: number; aboveTenCount: number }>();
+    occurrences.forEach((occurrence) => {
+      const bucket = formatSequenceTimestamp(occurrence.timestamp, granularity);
+      const current = buckets.get(bucket.key) ?? { label: bucket.label, occurrences: 0, nextEvaluatedCount: 0, aboveTargetCount: 0, aboveTenCount: 0 };
+      current.occurrences += 1;
+      const nextValue = occurrence.nextRecords[0]?.coefficient;
+      if (typeof nextValue === 'number' && Number.isFinite(nextValue)) {
+        current.nextEvaluatedCount += 1;
+        if (nextValue > targetThreshold) current.aboveTargetCount += 1;
+        if (nextValue > 10) current.aboveTenCount += 1;
+      }
+      buckets.set(bucket.key, current);
+    });
+    temporal[granularity] = [...buckets.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, value]) => ({
+        key,
+        label: value.label,
+        occurrences: value.occurrences,
+        nextEvaluatedCount: value.nextEvaluatedCount,
+        aboveTargetCount: value.aboveTargetCount,
+        aboveTargetRate: value.nextEvaluatedCount > 0 ? value.aboveTargetCount / value.nextEvaluatedCount : 0,
+        aboveTenCount: value.aboveTenCount,
+        aboveTenRate: value.nextEvaluatedCount > 0 ? value.aboveTenCount / value.nextEvaluatedCount : 0,
+      }));
+  });
+  return { sequenceLength, lowThreshold, targetThreshold, occurrences: occurrences.length, nextByPosition, temporal };
 }

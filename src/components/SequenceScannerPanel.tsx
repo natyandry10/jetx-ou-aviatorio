@@ -58,13 +58,19 @@ function PatternSummary({ pattern, selected, onSelect }: { pattern: SequencePatt
 export const SequenceScannerPanel: React.FC<SequenceScannerPanelProps> = ({ records }) => {
   const [config, setConfig] = useState<SequenceScannerConfig>(DEFAULT_SEQUENCE_SCANNER_CONFIG);
   const [mode, setMode] = useState<'all' | SequenceAnalysisMode>('all');
+  const [resultFilter, setResultFilter] = useState<'all' | 'above-ten'>('all');
   const [granularity, setGranularity] = useState<SequenceTemporalGranularity>('hour');
   const [selectedPatternId, setSelectedPatternId] = useState<string | null>(null);
 
   const result = useMemo(() => scanConditionalSequences(records, config), [records, config]);
-  const visiblePatterns = useMemo(() => result.patterns.filter((pattern) => mode === 'all' || pattern.mode === mode).slice(0, 60), [mode, result.patterns]);
+  const visiblePatterns = useMemo(() => result.patterns
+    .filter((pattern) => mode === 'all' || pattern.mode === mode)
+    .filter((pattern) => resultFilter === 'all' || pattern.nextByPosition.some((position) => position.aboveTenCount > 0))
+    .slice(0, 60), [mode, result.patterns, resultFilter]);
   const selectedPattern = visiblePatterns.find((pattern) => pattern.id === selectedPatternId) ?? visiblePatterns[0] ?? null;
   const temporalRows = selectedPattern?.temporal[granularity] ?? [];
+  const threeSmallSummary = result.threeSmallToAboveTen;
+  const threeSmallFirstPosition = threeSmallSummary.nextByPosition[0];
 
   const updateNumber = (field: keyof SequenceScannerConfig, rawValue: string) => {
     const value = Number(rawValue);
@@ -102,13 +108,25 @@ export const SequenceScannerPanel: React.FC<SequenceScannerPanelProps> = ({ reco
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 px-2.5 py-1.5"><Filter className="w-3.5 h-3.5 text-fuchsia-500" /><select value={mode} onChange={(event) => { setMode(event.target.value as 'all' | SequenceAnalysisMode); setSelectedPatternId(null); }} className="bg-transparent text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none"><option value="all">Tous les motifs</option><option value="exact">Valeurs exactes répétées</option><option value="low-high">Tranches basses puis seuil haut</option></select></div>
+        <label className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/70 dark:bg-amber-950/30 px-2.5 py-1.5 text-xs font-semibold text-amber-800 dark:text-amber-300"><input type="checkbox" checked={resultFilter === 'above-ten'} onChange={(event) => { setResultFilter(event.target.checked ? 'above-ten' : 'all'); setSelectedPatternId(null); }} className="accent-amber-600" />Résultats suivants &gt; 10x uniquement</label>
         <div className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 px-2.5 py-1.5"><CalendarClock className="w-3.5 h-3.5 text-fuchsia-500" /><select value={granularity} onChange={(event) => setGranularity(event.target.value as SequenceTemporalGranularity)} className="bg-transparent text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none">{granularityOptions.map((option) => <option key={option.value} value={option.value}>Regrouper par {option.label.toLowerCase()}</option>)}</select></div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 p-3"><p className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">Ordonnés</p><p className="mt-1 text-lg font-bold text-slate-900 dark:text-white">{result.orderedValidCount}</p><p className="text-[10px] text-slate-500 dark:text-slate-400">date + heure valides</p></div>
-        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 p-3"><p className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">Motifs trouvés</p><p className="mt-1 text-lg font-bold text-fuchsia-700 dark:text-fuchsia-300">{visiblePatterns.length}</p><p className="text-[10px] text-slate-500 dark:text-slate-400">jusqu’à 60 affichés</p></div>
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 p-3"><p className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">Motifs trouvés</p><p className="mt-1 text-lg font-bold text-fuchsia-700 dark:text-fuchsia-300">{visiblePatterns.length}</p><p className="text-[10px] text-slate-500 dark:text-slate-400">après filtres, jusqu’à 60</p></div>
         <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 p-3"><p className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">Ignorés</p><p className="mt-1 text-lg font-bold text-amber-600 dark:text-amber-300">{result.ignoredCount}</p><p className="text-[10px] text-slate-500 dark:text-slate-400">date/coefficient invalide</p></div>
+      </div>
+
+      <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/70 dark:bg-amber-950/30 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div><p className="text-[10px] uppercase tracking-wider font-bold text-amber-700 dark:text-amber-300">Taux historique — 3 petits puis &gt;10x</p><p className="mt-1 text-xs text-amber-900 dark:text-amber-100">Après trois résultats consécutifs ≤ {config.lowThreshold.toFixed(2)}x, mesure des résultats suivants qui dépassent 10x.</p></div>
+          <span className="text-[10px] text-amber-700 dark:text-amber-300">{threeSmallSummary.occurrences} séquence(s)</span>
+        </div>
+        <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2">
+          {threeSmallSummary.nextByPosition.map((position) => <div key={position.position} className="rounded-lg border border-amber-200/80 dark:border-amber-800/70 bg-white/70 dark:bg-slate-900/50 p-2.5"><p className="text-[10px] font-bold text-slate-500 dark:text-slate-400">Position +{position.position}</p><p className="mt-1 text-sm font-bold text-amber-700 dark:text-amber-300">{formatRate(position.aboveTenRate)} &gt; 10x</p><p className="text-[10px] text-slate-500 dark:text-slate-400">{position.aboveTenCount}/{position.sampleCount} observé(s) · méd. {formatValue(position.median)}</p></div>)}
+        </div>
+        {threeSmallFirstPosition?.sampleCount === 0 && <p className="mt-3 text-[11px] text-amber-800 dark:text-amber-300">Aucune séquence complète de trois petits multiplicateurs ne permet de calculer ce taux sur la période actuelle.</p>}
       </div>
 
       {visiblePatterns.length > 0 ? (
@@ -128,13 +146,13 @@ export const SequenceScannerPanel: React.FC<SequenceScannerPanelProps> = ({ reco
               <div>
                 <p className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-2">Résultats observés après le motif</p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2">
-                  {selectedPattern.nextByPosition.map((position) => <div key={position.position} className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5"><p className="text-[10px] font-bold text-slate-500 dark:text-slate-400">Position +{position.position}</p><p className="mt-1 text-xs font-bold text-indigo-700 dark:text-indigo-300">{formatRate(position.aboveTargetRate)} &gt; {formatValue(config.targetThreshold)}</p><p className="text-[10px] text-slate-500 dark:text-slate-400">n={position.sampleCount} · méd. {formatValue(position.median)}</p><p className="text-[10px] text-slate-500 dark:text-slate-400">P90 {formatValue(position.p90)} · max {formatValue(position.maximum)}</p></div>)}
+                  {selectedPattern.nextByPosition.map((position) => <div key={position.position} className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5"><p className="text-[10px] font-bold text-slate-500 dark:text-slate-400">Position +{position.position}</p><p className="mt-1 text-xs font-bold text-indigo-700 dark:text-indigo-300">{formatRate(position.aboveTargetRate)} &gt; {formatValue(config.targetThreshold)}</p><p className="text-[10px] font-semibold text-amber-700 dark:text-amber-300">{formatRate(position.aboveTenRate)} &gt; 10x</p><p className="text-[10px] text-slate-500 dark:text-slate-400">n={position.sampleCount} · méd. {formatValue(position.median)}</p><p className="text-[10px] text-slate-500 dark:text-slate-400">P90 {formatValue(position.p90)} · max {formatValue(position.maximum)}</p></div>)}
                 </div>
               </div>
 
               <div>
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-2"><p className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">Répartition temporelle — {granularityOptions.find((option) => option.value === granularity)?.label}</p><span className="text-[10px] text-slate-500 dark:text-slate-400">Résultat suivant uniquement</span></div>
-                {temporalRows.length > 0 ? <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800"><table className="w-full min-w-[540px] text-xs"><thead className="bg-white dark:bg-slate-900 text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400"><tr><th className="px-3 py-2 text-left">Période</th><th className="px-3 py-2 text-right">Motifs</th><th className="px-3 py-2 text-right">Échantillon</th><th className="px-3 py-2 text-right">&gt; cible</th><th className="px-3 py-2 text-right">Taux observé</th></tr></thead><tbody className="divide-y divide-slate-100 dark:divide-slate-800">{temporalRows.map((row) => <tr key={row.key} className="text-slate-700 dark:text-slate-300"><td className="px-3 py-2 font-semibold">{row.label}</td><td className="px-3 py-2 text-right">{row.occurrences}</td><td className="px-3 py-2 text-right">{row.nextEvaluatedCount}</td><td className="px-3 py-2 text-right">{row.aboveTargetCount}</td><td className="px-3 py-2 text-right font-bold text-fuchsia-700 dark:text-fuchsia-300">{formatRate(row.aboveTargetRate)}</td></tr>)}</tbody></table></div> : <p className="text-xs text-slate-500 dark:text-slate-400">Pas assez de données pour ce regroupement.</p>}
+                {temporalRows.length > 0 ? <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800"><table className="w-full min-w-[540px] text-xs"><thead className="bg-white dark:bg-slate-900 text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400"><tr><th className="px-3 py-2 text-left">Période</th><th className="px-3 py-2 text-right">Motifs</th><th className="px-3 py-2 text-right">Échantillon</th><th className="px-3 py-2 text-right">&gt; cible</th><th className="px-3 py-2 text-right">&gt;10x</th><th className="px-3 py-2 text-right">Taux observé</th></tr></thead><tbody className="divide-y divide-slate-100 dark:divide-slate-800">{temporalRows.map((row) => <tr key={row.key} className="text-slate-700 dark:text-slate-300"><td className="px-3 py-2 font-semibold">{row.label}</td><td className="px-3 py-2 text-right">{row.occurrences}</td><td className="px-3 py-2 text-right">{row.nextEvaluatedCount}</td><td className="px-3 py-2 text-right">{row.aboveTargetCount}</td><td className="px-3 py-2 text-right">{row.aboveTenCount}</td><td className="px-3 py-2 text-right font-bold text-fuchsia-700 dark:text-fuchsia-300">{formatRate(row.aboveTenRate)}</td></tr>)}</tbody></table></div> : <p className="text-xs text-slate-500 dark:text-slate-400">Pas assez de données pour ce regroupement.</p>}
               </div>
             </div>
           )}
