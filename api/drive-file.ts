@@ -17,6 +17,7 @@ interface DriveFileResponse {
 
 interface DriveFileListResponse {
   files?: DriveFileResponse[];
+  nextPageToken?: string;
 }
 
 function getDriveConfig(): { apiKey: string; folderId: string } | null {
@@ -54,23 +55,30 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
   }
 
   try {
-    const folderFilesUrl = new URL('https://www.googleapis.com/drive/v3/files');
-    folderFilesUrl.searchParams.set(
-      'q',
-      `'${config.folderId}' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'`
-    );
-    folderFilesUrl.searchParams.set('pageSize', '100');
-    folderFilesUrl.searchParams.set('fields', 'files(id,name,mimeType)');
-    folderFilesUrl.searchParams.set('key', config.apiKey);
+    let metadata: DriveFileResponse | undefined;
+    let pageToken: string | undefined;
 
-    const folderFilesResponse = await fetch(folderFilesUrl);
-    if (!folderFilesResponse.ok) {
-      res.status(502).json({ error: `Google Drive a répondu avec le statut ${folderFilesResponse.status}.` });
-      return;
-    }
+    do {
+      const folderFilesUrl = new URL('https://www.googleapis.com/drive/v3/files');
+      folderFilesUrl.searchParams.set(
+        'q',
+        `'${config.folderId}' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'`
+      );
+      folderFilesUrl.searchParams.set('pageSize', '100');
+      folderFilesUrl.searchParams.set('fields', 'nextPageToken,files(id,name,mimeType)');
+      folderFilesUrl.searchParams.set('key', config.apiKey);
+      if (pageToken) folderFilesUrl.searchParams.set('pageToken', pageToken);
 
-    const folderFiles = (await folderFilesResponse.json()) as DriveFileListResponse;
-    const metadata = folderFiles.files?.find((file) => file.id === fileId && isJsonFile(file));
+      const folderFilesResponse = await fetch(folderFilesUrl);
+      if (!folderFilesResponse.ok) {
+        res.status(502).json({ error: `Google Drive a répondu avec le statut ${folderFilesResponse.status}.` });
+        return;
+      }
+
+      const folderFiles = (await folderFilesResponse.json()) as DriveFileListResponse;
+      metadata = folderFiles.files?.find((file) => file.id === fileId && isJsonFile(file));
+      pageToken = metadata ? undefined : folderFiles.nextPageToken;
+    } while (pageToken && !metadata);
     if (!metadata) {
       res.status(403).json({ error: 'Le fichier ne se trouve pas dans le dossier Drive configuré.' });
       return;

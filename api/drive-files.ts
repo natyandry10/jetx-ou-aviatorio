@@ -18,6 +18,7 @@ interface DriveFile {
 
 interface DriveFileListResponse {
   files?: DriveFile[];
+  nextPageToken?: string;
 }
 
 function getDriveConfig(): { apiKey: string; folderId: string } | null {
@@ -48,28 +49,36 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
     return;
   }
 
-  const url = new URL('https://www.googleapis.com/drive/v3/files');
-  url.searchParams.set(
-    'q',
-    `'${config.folderId}' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'`
-  );
-  url.searchParams.set('orderBy', 'modifiedTime desc');
-  url.searchParams.set('pageSize', '100');
-  url.searchParams.set('fields', 'files(id,name,mimeType,modifiedTime,size)');
-  url.searchParams.set('key', config.apiKey);
-
   try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      res.status(502).json({ error: `Google Drive a répondu avec le statut ${response.status}.` });
-      return;
-    }
+    const files: DriveFile[] = [];
+    let pageToken: string | undefined;
 
-    const data = (await response.json()) as DriveFileListResponse;
-    const files = (data.files ?? []).filter(
-      (file) => file.id && file.name && isJsonFile(file)
-    );
-    res.status(200).json({ files });
+    do {
+      const url = new URL('https://www.googleapis.com/drive/v3/files');
+      url.searchParams.set(
+        'q',
+        `'${config.folderId}' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'`
+      );
+      url.searchParams.set('orderBy', 'modifiedTime desc');
+      url.searchParams.set('pageSize', '100');
+      url.searchParams.set('fields', 'nextPageToken,files(id,name,mimeType,modifiedTime,size)');
+      url.searchParams.set('key', config.apiKey);
+      if (pageToken) url.searchParams.set('pageToken', pageToken);
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        res.status(502).json({ error: `Google Drive a répondu avec le statut ${response.status}.` });
+        return;
+      }
+
+      const data = (await response.json()) as DriveFileListResponse;
+      files.push(...(data.files ?? []));
+      pageToken = data.nextPageToken;
+    } while (pageToken);
+
+    res.status(200).json({
+      files: files.filter((file) => file.id && file.name && isJsonFile(file)),
+    });
   } catch {
     res.status(502).json({ error: 'Impossible de contacter Google Drive.' });
   }

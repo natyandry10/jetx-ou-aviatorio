@@ -11,6 +11,7 @@ export interface DriveFile {
 
 interface DriveFilesResponse {
   files?: DriveFile[];
+  nextPageToken?: string;
   error?: string;
 }
 
@@ -45,14 +46,23 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
 
 export async function listDriveJsonFiles(accessToken?: string, signal?: AbortSignal): Promise<DriveFile[]> {
   if (accessToken && DIRECT_DRIVE_FOLDER_ID) {
-    const url = new URL(`${DRIVE_API_BASE}/files`);
-    url.searchParams.set('q', `'${DIRECT_DRIVE_FOLDER_ID}' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'`);
-    url.searchParams.set('pageSize', '100');
-    url.searchParams.set('orderBy', 'modifiedTime desc');
-    url.searchParams.set('fields', 'files(id,name,mimeType,modifiedTime,size)');
-    const response = await fetch(url, { signal, cache: 'no-store', headers: { Authorization: `Bearer ${accessToken}`, 'Cache-Control': 'no-cache' } });
-    const data = await readJsonResponse<DriveFilesResponse>(response);
-    return (data.files ?? []).filter(isJsonFile);
+    const files: DriveFile[] = [];
+    let pageToken: string | undefined;
+
+    do {
+      const url = new URL(`${DRIVE_API_BASE}/files`);
+      url.searchParams.set('q', `'${DIRECT_DRIVE_FOLDER_ID}' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'`);
+      url.searchParams.set('pageSize', '100');
+      url.searchParams.set('orderBy', 'modifiedTime desc');
+      url.searchParams.set('fields', 'nextPageToken,files(id,name,mimeType,modifiedTime,size)');
+      if (pageToken) url.searchParams.set('pageToken', pageToken);
+      const response = await fetch(url, { signal, cache: 'no-store', headers: { Authorization: `Bearer ${accessToken}`, 'Cache-Control': 'no-cache' } });
+      const data = await readJsonResponse<DriveFilesResponse>(response);
+      files.push(...(data.files ?? []));
+      pageToken = data.nextPageToken;
+    } while (pageToken);
+
+    return files.filter(isJsonFile);
   }
   const response = await fetch(`/api/drive-files?refresh=${Date.now()}`, { signal, cache: 'no-store' });
   const data = await readJsonResponse<DriveFilesResponse>(response);
