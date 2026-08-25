@@ -1,8 +1,14 @@
 import { JsonRecord } from '../types';
 import type { AnalyticsPreferences } from './analytics';
 
-export const RECORDS_STORAGE_KEY = 'json-dataviewer:records:v1';
+export const RECORDS_STORAGE_KEY = 'json-dataviewer:records:v2';
 export const ANALYTICS_PREFERENCES_STORAGE_KEY = 'json-dataviewer:analytics-preferences:v1';
+
+const LEGACY_RECORDS_STORAGE_KEY = 'json-dataviewer:records:v1';
+const RECORDS_DATABASE_NAME = 'json-dataviewer';
+const RECORDS_DATABASE_VERSION = 1;
+const RECORDS_OBJECT_STORE = 'records';
+const RECORDS_OBJECT_KEY = 'current';
 
 function isJsonRecord(value: unknown): value is JsonRecord {
   if (typeof value !== 'object' || value === null) return false;
@@ -18,29 +24,90 @@ function isJsonRecord(value: unknown): value is JsonRecord {
   );
 }
 
-export function loadPersistedRecords(fallback: () => JsonRecord[]): JsonRecord[] {
-  if (typeof window === 'undefined') return fallback();
-
+function readLocalFallback(): JsonRecord[] {
   try {
     const stored = window.localStorage.getItem(RECORDS_STORAGE_KEY);
-    if (stored === null) return fallback();
+    if (stored === null) return [];
 
     const parsed: unknown = JSON.parse(stored);
-    if (!Array.isArray(parsed) || !parsed.every(isJsonRecord)) return fallback();
-
-    return parsed;
+    return Array.isArray(parsed) && parsed.every(isJsonRecord) ? parsed : [];
   } catch {
-    return fallback();
+    return [];
   }
 }
 
-export function persistRecords(records: JsonRecord[]): void {
+function clearLegacyRecordStorage(): void {
+  try {
+    window.localStorage.removeItem(LEGACY_RECORDS_STORAGE_KEY);
+  } catch {
+    // Local storage may be disabled; IndexedDB remains the primary store.
+  }
+}
+
+function openRecordsDatabase(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    if (typeof window === 'undefined' || !window.indexedDB) {
+      reject(new Error('IndexedDB est indisponible dans ce navigateur.'));
+      return;
+    }
+
+    const request = window.indexedDB.open(RECORDS_DATABASE_NAME, RECORDS_DATABASE_VERSION);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(RECORDS_OBJECT_STORE)) {
+        request.result.createObjectStore(RECORDS_OBJECT_STORE);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error ?? new Error('Impossible d’ouvrir IndexedDB.'));
+  });
+}
+
+export async function loadPersistedRecords(): Promise<JsonRecord[]> {
+  if (typeof window === 'undefined') return [];
+
+  try {
+    const database = await openRecordsDatabase();
+    const transaction = database.transaction(RECORDS_OBJECT_STORE, 'readonly');
+    const request = transaction.objectStore(RECORDS_OBJECT_STORE).get(RECORDS_OBJECT_KEY);
+
+    const records = await new Promise<JsonRecord[]>((resolve, reject) => {
+      request.onsuccess = () => {
+        const value: unknown = request.result;
+        resolve(Array.isArray(value) && value.every(isJsonRecord) ? value : []);
+      };
+      request.onerror = () => reject(request.error ?? new Error('Impossible de lire IndexedDB.'));
+    });
+
+    database.close();
+    clearLegacyRecordStorage();
+    return records;
+  } catch {
+    clearLegacyRecordStorage();
+    return readLocalFallback();
+  }
+}
+
+export async function persistRecords(records: JsonRecord[]): Promise<void> {
   if (typeof window === 'undefined') return;
 
   try {
-    window.localStorage.setItem(RECORDS_STORAGE_KEY, JSON.stringify(records));
+    const database = await openRecordsDatabase();
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction(RECORDS_OBJECT_STORE, 'readwrite');
+      transaction.objectStore(RECORDS_OBJECT_STORE).put(records, RECORDS_OBJECT_KEY);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error ?? new Error('Impossible d’écrire dans IndexedDB.'));
+      transaction.onabort = () => reject(transaction.error ?? new Error('Écriture IndexedDB interrompue.'));
+    });
+    database.close();
+    clearLegacyRecordStorage();
   } catch {
-    // Storage may be disabled or full; the in-memory experience remains available.
+    try {
+      window.localStorage.setItem(RECORDS_STORAGE_KEY, JSON.stringify(records));
+      clearLegacyRecordStorage();
+    } catch {
+      // Le stockage peut être désactivé ou plein ; la session mémoire reste utilisable.
+    }
   }
 }
 
@@ -78,7 +145,7 @@ export function persistAnalyticsPreferences(preferences: AnalyticsPreferences): 
   try {
     window.localStorage.setItem(ANALYTICS_PREFERENCES_STORAGE_KEY, JSON.stringify(preferences));
   } catch {
-    // Storage may be disabled or full; the current session remains available.
+    // Les préférences restent actives en mémoire si le stockage est indisponible.
   }
 }
 

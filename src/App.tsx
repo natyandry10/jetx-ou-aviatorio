@@ -33,7 +33,8 @@ const INITIAL_FILTER_STATE: FilterState = {
 };
 
 export default function App() {
-  const [records, setRecords] = useState<JsonRecord[]>(() => loadPersistedRecords(getInitialRecords));
+  const [records, setRecords] = useState<JsonRecord[]>([]);
+  const [isStorageLoaded, setIsStorageLoaded] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>('accueil');
   const [filters, setFilters] = useState<FilterState>(INITIAL_FILTER_STATE);
   const [sortConfig, setSortConfig] = useState<SortConfig>({
@@ -44,8 +45,21 @@ export default function App() {
   const [lastImportSummary, setLastImportSummary] = useState<ImportSummary | null>(null);
 
   useEffect(() => {
-    persistRecords(records);
-  }, [records]);
+    let cancelled = false;
+    void loadPersistedRecords().then((storedRecords) => {
+      if (cancelled) return;
+      setRecords(storedRecords);
+      setIsStorageLoaded(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isStorageLoaded) return;
+    void persistRecords(records);
+  }, [isStorageLoaded, records]);
 
   // Modal states
   const [isImportOpen, setIsImportOpen] = useState<boolean>(false);
