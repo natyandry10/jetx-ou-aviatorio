@@ -27,7 +27,10 @@ jobs:
           node-version: 22
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+
+      - name: Type-check application
+        run: npm run lint
 
       - name: Build application
         run: npm run build

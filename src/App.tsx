@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { JsonRecord, FilterState, SortConfig, SortField, ActiveTab } from './types';
 import { getInitialRecords } from './data/initialData';
 import {
@@ -19,6 +19,7 @@ import { StatsView } from './components/StatsView';
 import { ImportModal } from './components/ImportModal';
 import { ExportModal } from './components/ExportModal';
 import { EditRecordModal } from './components/EditRecordModal';
+import { loadPersistedRecords, persistRecords } from './utils/storage';
 
 const INITIAL_FILTER_STATE: FilterState = {
   year: 'all',
@@ -32,7 +33,7 @@ const INITIAL_FILTER_STATE: FilterState = {
 };
 
 export default function App() {
-  const [records, setRecords] = useState<JsonRecord[]>(() => getInitialRecords());
+  const [records, setRecords] = useState<JsonRecord[]>(() => loadPersistedRecords(getInitialRecords));
   const [activeTab, setActiveTab] = useState<ActiveTab>('accueil');
   const [filters, setFilters] = useState<FilterState>(INITIAL_FILTER_STATE);
   const [sortConfig, setSortConfig] = useState<SortConfig>({
@@ -40,6 +41,10 @@ export default function App() {
     direction: 'desc',
   });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    persistRecords(records);
+  }, [records]);
 
   // Modal states
   const [isImportOpen, setIsImportOpen] = useState<boolean>(false);
@@ -77,11 +82,21 @@ export default function App() {
 
   // Selection handlers
   const handleToggleSelectAll = () => {
-    if (selectedIds.size === filteredRecords.length && filteredRecords.length > 0) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filteredRecords.map((r) => r.id)));
-    }
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      const allVisibleSelected =
+        filteredRecords.length > 0 && filteredRecords.every((record) => next.has(record.id));
+
+      filteredRecords.forEach((record) => {
+        if (allVisibleSelected) {
+          next.delete(record.id);
+        } else {
+          next.add(record.id);
+        }
+      });
+
+      return next;
+    });
   };
 
   const handleToggleSelectOne = (id: string) => {
@@ -148,7 +163,7 @@ export default function App() {
 
   // Restore sample dataset
   const handleRestoreInitialData = () => {
-    if (window.confirm('Voulez-vous restaurer les 60 enregistrements d\'origine ?')) {
+    if (window.confirm(`Voulez-vous restaurer les ${getInitialRecords().length} enregistrements d'origine ?`)) {
       setRecords(getInitialRecords());
       setSelectedIds(new Set());
       setFilters(INITIAL_FILTER_STATE);

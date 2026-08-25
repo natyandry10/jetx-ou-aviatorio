@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { JsonRecord, SortConfig, SortField } from '../types';
 import { formatDateFrench, getCoefficientBadgeStyle } from '../utils/formatters';
 import {
@@ -45,6 +45,10 @@ export const DataTable: React.FC<DataTableProps> = ({
   const [pageSize, setPageSize] = useState<number>(25);
   const [previewRecord, setPreviewRecord] = useState<JsonRecord | null>(null);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [records, pageSize]);
+
   // Pagination calculation
   const totalItems = records.length;
   const totalPages = pageSize === -1 ? 1 : Math.max(1, Math.ceil(totalItems / pageSize));
@@ -52,12 +56,14 @@ export const DataTable: React.FC<DataTableProps> = ({
   const startIndex = pageSize === -1 ? 0 : (validPage - 1) * pageSize;
   const paginatedRecords = pageSize === -1 ? records : records.slice(startIndex, startIndex + pageSize);
 
-  const handleCopy = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedHash(id);
-    setTimeout(() => {
+  const handleCopy = async (text: string, id: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedHash(id);
+      window.setTimeout(() => setCopiedHash(null), 2000);
+    } catch {
       setCopiedHash(null);
-    }, 2000);
+    }
   };
 
   const renderSortIcon = (field: SortField) => {
@@ -71,8 +77,12 @@ export const DataTable: React.FC<DataTableProps> = ({
     );
   };
 
-  const isAllSelected = totalItems > 0 && selectedIds.size === totalItems;
-  const isSomeSelected = selectedIds.size > 0 && selectedIds.size < totalItems;
+  const selectedVisibleCount = records.reduce(
+    (count, record) => count + (selectedIds.has(record.id) ? 1 : 0),
+    0
+  );
+  const isAllSelected = totalItems > 0 && selectedVisibleCount === totalItems;
+  const isSomeSelected = selectedVisibleCount > 0 && selectedVisibleCount < totalItems;
 
   return (
     <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md rounded-xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm overflow-hidden flex flex-col" id="section-tableau">

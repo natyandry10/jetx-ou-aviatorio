@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { JsonRecord } from '../types';
+import { createRecordId } from '../utils/storage';
 import { Upload, FileCode, CheckCircle2, AlertTriangle, X, FileText } from 'lucide-react';
 
 interface ImportModalProps {
@@ -33,21 +34,39 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
 
       // Validate & map items
       const validRecords: JsonRecord[] = parsed.map((item, idx) => {
-        if (typeof item !== 'object' || item === null) {
+        if (typeof item !== 'object' || item === null || Array.isArray(item)) {
           throw new Error(`L'élément à l'index ${idx} n'est pas un objet valide.`);
         }
+
+        const source = item as Record<string, unknown>;
+        const dateBrute = source.date_brute ?? source.date ?? source.timestamp;
+        const dateUtc = source.date_utc ?? source.utc ?? dateBrute;
+        const coefficientValue = source.coefficient ?? source.multiplier ?? source.coeff;
+        const hash = source.hash ?? source.sha256;
+        const coefficient = Number(coefficientValue);
+
+        if (typeof dateBrute !== 'string' || dateBrute.trim() === '') {
+          throw new Error(`L'élément à l'index ${idx} doit contenir une date_brute valide.`);
+        }
+        if (!Number.isFinite(coefficient)) {
+          throw new Error(`L'élément à l'index ${idx} doit contenir un coefficient numérique valide.`);
+        }
+        if (typeof hash !== 'string' || hash.trim() === '') {
+          throw new Error(`L'élément à l'index ${idx} doit contenir un hash SHA-256 valide.`);
+        }
+
         return {
-          id: `imported-${Date.now()}-${idx}`,
-          date_brute: String(item.date_brute || item.date || item.timestamp || new Date().toISOString()),
-          date_utc: String(item.date_utc || item.utc || new Date().toISOString()),
-          coefficient: Number(item.coefficient || item.multiplier || item.coeff || 1),
-          hash: String(item.hash || item.sha256 || 'N/A')
+          id: createRecordId('imported'),
+          date_brute: dateBrute,
+          date_utc: typeof dateUtc === 'string' && dateUtc.trim() !== '' ? dateUtc : dateBrute,
+          coefficient,
+          hash,
         };
       });
 
       setParsedPreview(validRecords);
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Erreur lors de la lecture du JSON.');
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Erreur lors de la lecture du JSON.');
       setParsedPreview(null);
     }
   };

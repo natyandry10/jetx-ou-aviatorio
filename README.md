@@ -1,82 +1,77 @@
-# 📊 Visualiseur & Saisie JSON (Frosted Glass Edition)
+# Visualiseur et saisie JSON
 
-Application moderne et réactive construite avec **React**, **TypeScript**, **Tailwind CSS** et **Vite** pour la visualisation, le filtrage temporel multicritère, la détection des doublons, la saisie et l'import/export de jeux de données JSON.
+Application React + TypeScript + Vite pour visualiser, filtrer, corriger et exporter des jeux de données JSON contenant des dates, des coefficients et des hashes SHA-256.
 
----
+## Fonctionnalités
 
-## ✨ Fonctionnalités Principales
+L’application propose trois espaces de travail : un tableau de bord avec les indicateurs principaux, une vue de saisie avec tableau paginé et une vue statistiques. Les données peuvent être filtrées par année, mois, jour, heure, coefficient, texte libre et type de doublon.
 
-- **🧭 Navigation en Onglets** :
-  - **Accueil / Vue d'ensemble** : Cartes récapitulatives, distribution par plage de coefficient et aperçu rapide.
-  - **Saisie & Données** : Tableau interactif avec pagination, tri par colonne, sélection multiple et édition.
-  - **Statistiques & Doublons** : Analyses graphiques des coefficients, détection des doublons et métriques clés.
+Les enregistrements peuvent être ajoutés ou modifiés manuellement. L’import accepte un tableau JSON depuis un fichier ou le presse-papiers, avec validation des champs `date_brute`, `coefficient` et `hash`. L’export est disponible en JSON et CSV pour l’ensemble des données, la sélection ou le résultat filtré.
 
-- **⏱️ Filtrage Multicritère Avancé** :
-  - Filtrage temporel par **Année**, **Mois**, **Date précise (Jour)** et **Heure (00h - 23h)**.
-  - Filtre dédié aux **Doublons** (tous les doublons, valeurs uniques, ou coefficient spécifique).
-  - Plages de coefficient **Min / Max** et recherche instantanée dans les **Hash SHA-256** et dates.
+Les données sont conservées dans le stockage local du navigateur sous la clé de version `json-dataviewer:records:v1`. Cette persistance est locale à chaque navigateur et ne remplace pas une sauvegarde externe : utilisez l’export JSON pour archiver ou transférer un jeu de données.
 
-- **💾 Import & Export Polyvalents** :
-  - Importation par **Glisser-Déposer** de fichier JSON ou par **Copier-Coller** direct avec validation de syntaxe.
-  - Modes d'importation au choix : *Remplacement total* ou *Fusion / Ajout*.
-  - Exportation ciblée (éléments filtrés, sélection manuelle ou totalité) en formats **JSON** et **CSV (Excel)**.
-
-- **🎨 Design Frosted Glass (Effet Verre Dépoli)** :
-  - Arrière-plans translucides avec flou d'arrière-plan (`backdrop-blur`).
-  - Thème sombre & clair avec bascule dynamique.
-  - Typographie nette et contrastes respectant les normes d'accessibilité WCAG AA.
-
----
-
-## 🚀 Démarrage Rapide
+## Démarrage local
 
 ### Prérequis
-- [Node.js](https://nodejs.org/) version 18 ou supérieure
-- `npm` ou `yarn`
+
+- Node.js 22 recommandé, ou une version compatible avec le projet ;
+- npm.
 
 ### Installation
+
 ```bash
-git clone https://github.com/votre-utilisateur/votre-depot.git
-cd votre-depot
-npm install
+git clone https://github.com/natyandry10/jetx-ou-aviatorio.git
+cd jetx-ou-aviatorio
+npm ci
 ```
 
-### Lancement en mode Développement
+### Développement
+
 ```bash
 npm run dev
 ```
-L'application sera accessible sur `http://localhost:3000`.
 
-### Construction pour la Production
+L’application est alors disponible sur `http://localhost:3000`.
+
+### Vérification et build de production
+
 ```bash
+npm run lint
 npm run build
+npm run preview
 ```
-Les fichiers statiques optimisés seront générés dans le répertoire `dist/`.
 
----
+La commande `lint` effectue le contrôle TypeScript. La commande `build` génère les fichiers statiques dans `dist/`.
 
-## 🌐 Déploiement sur GitHub Pages
+## Déploiement
 
-Ce projet inclut un workflow GitHub Actions prêt à l'emploi (`.github/workflows/deploy.yml`).
+### Vercel
 
-1. Poussez votre code sur votre dépôt GitHub :
-   ```bash
-   git init
-   git add .
-   git commit -m "Initial commit"
-   git branch -M main
-   git remote add origin https://github.com/<votre-nom>/<nom-du-repo>.git
-   git push -u origin main
-   ```
-2. Rendez-vous dans les paramètres de votre dépôt GitHub (**Settings** > **Pages**).
-3. Sous **Build and deployment** > **Source**, sélectionnez **GitHub Actions**.
-4. Chaque push sur la branche `main` déclenchera automatiquement le déploiement sur GitHub Pages.
+Le dépôt est compatible avec un projet Vercel relié à GitHub. Le framework Vite est détecté automatiquement ; le build utilise `npm run build` et le répertoire de sortie est `dist`. Une fois le dépôt relié, chaque push sur la branche de production peut déclencher un nouveau déploiement.
 
----
+### GitHub Pages
 
-## 🛠️ Technologies Utilisées
-- **React 19**
-- **TypeScript**
-- **Tailwind CSS v4**
-- **Lucide Icons**
-- **Vite**
+Un workflow GitHub Actions reste présent dans `.github/workflows/deploy.yml`. Il installe les dépendances avec `npm ci`, exécute `npm run lint`, construit l’application puis publie `dist` sur GitHub Pages.
+
+## Structure principale
+
+```text
+src/
+├── components/       # Tableau, filtres, modales et vues
+├── data/             # Jeu de données initial
+├── utils/            # Filtrage, formatage, export et persistance
+├── App.tsx           # État global et orchestration
+└── types.ts          # Modèle TypeScript des enregistrements
+```
+
+## Améliorations intégrées
+
+Cette version ajoute la restauration automatique des données conservées dans le navigateur, des identifiants d’import uniques, une validation stricte des données JSON et une sélection globale compatible avec les filtres actifs. La pagination revient également à la première page lorsqu’un filtre modifie le jeu de résultats, et la CI vérifie désormais le typage avant le build.
+
+## Feuille de route suggérée
+
+Pour les prochaines itérations, les améliorations les plus utiles seraient l’ajout de tests automatisés sur le filtrage et les imports, une sauvegarde optionnelle vers une base de données, un historique annuler/rétablir pour les suppressions, ainsi qu’une analyse de performance sur les fichiers JSON volumineux. Une validation de schéma versionnée et un import par lots seraient également pertinents si les volumes augmentent.
+
+## Licence
+
+Le code source est distribué sous licence Apache-2.0 lorsqu’aucune autre indication ne s’applique.
