@@ -412,7 +412,7 @@ function summarizeSequenceValues(values: number[], targetThreshold: number, posi
 }
 
 function buildSequenceExamples(occurrences: SequenceOccurrence[], includeFirstFollowingResult = false, limit = 6): SequenceDisplayExample[] {
-  return occurrences.slice(0, limit).map((occurrence) => {
+  return occurrences.slice(-limit).map((occurrence) => {
     const records = includeFirstFollowingResult ? [...occurrence.sequenceRecords, ...occurrence.nextRecords.slice(0, 1)] : occurrence.sequenceRecords;
     const timestamps = includeFirstFollowingResult ? [...occurrence.sequenceTimestamps, ...occurrence.nextRecords.slice(0, 1).map((record) => getValidTimestamp(record)).filter((timestamp): timestamp is number => timestamp !== null)] : occurrence.sequenceTimestamps;
     return {

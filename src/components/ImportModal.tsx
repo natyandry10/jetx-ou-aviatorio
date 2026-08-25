@@ -17,6 +17,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
   const [parsedPreview, setParsedPreview] = useState<JsonRecord[] | null>(null);
   const [parseWarnings, setParseWarnings] = useState<string[]>([]);
   const [parseSkippedCount, setParseSkippedCount] = useState(0);
+  const [parseNonDataCount, setParseNonDataCount] = useState(0);
   const [sourceFileName, setSourceFileName] = useState('JSON local');
   const [activeTab, setActiveTab] = useState<'file' | 'text'>('file');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -28,6 +29,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
     setParsedPreview(null);
     setParseWarnings([]);
     setParseSkippedCount(0);
+    setParseNonDataCount(0);
 
     if (content.trim() === '') return;
 
@@ -37,6 +39,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
       setParsedPreview(result.records);
       setParseWarnings(result.warnings);
       setParseSkippedCount(result.skippedCount);
+      setParseNonDataCount(result.nonDataCount);
       if (result.warnings.length > 0) {
         setErrorMsg(result.warnings.join(' '));
       }
@@ -78,6 +81,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
       fileName: sourceFileName,
       warnings: parseWarnings,
       skippedCount: parseSkippedCount,
+      nonDataCount: parseNonDataCount,
     });
     onClose();
     // reset
@@ -86,6 +90,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
     setErrorMsg(null);
     setParseWarnings([]);
     setParseSkippedCount(0);
+    setParseNonDataCount(0);
     setSourceFileName('JSON local');
   };
 
@@ -203,9 +208,10 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
           <div className="p-3.5 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 text-emerald-800 dark:text-emerald-300 text-xs flex items-center justify-between">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>
-                <strong>{parsedPreview.length} enregistrements</strong> valides détectés et prêts à être importés !
-              </span>
+              <div>
+                <span className="block"><strong>{parsedPreview.length} enregistrements</strong> valides détectés et prêts à être importés !</span>
+                {parseNonDataCount > 0 && <span className="mt-1 block text-[11px] text-emerald-700/80 dark:text-emerald-300/80">{parseNonDataCount} ligne(s) de statut non analytique ignorée(s), sans date exploitable.</span>}
+              </div>
             </div>
           </div>
         )}

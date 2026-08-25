@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { AlertTriangle, CloudDownload, RefreshCw } from 'lucide-react';
 import { ImportMetadata, JsonRecord } from '../types';
 import { DriveFile, listDriveJsonFiles, loadDriveJsonFile } from '../utils/drive';
+import { useGoogleDriveAuth } from '../auth/GoogleDriveAuthContext';
+import { GoogleDriveLoginPanel } from './GoogleDriveLoginPanel';
 
 interface DriveImportPanelProps {
   onImport: (records: JsonRecord[], mode: 'replace' | 'append', metadata?: ImportMetadata) => void;
@@ -31,24 +33,29 @@ export const DriveImportPanel: React.FC<DriveImportPanelProps> = ({ onImport }) 
   const [selectedFileId, setSelectedFileId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [status, setStatus] = useState<Status | null>(null);
+  const { accessToken } = useGoogleDriveAuth();
 
   const loadFile = async (fileId: string, availableFiles: DriveFile[]) => {
     const file = availableFiles.find((candidate) => candidate.id === fileId);
-    const result = await loadDriveJsonFile(fileId);
+    const result = await loadDriveJsonFile(fileId, undefined, accessToken, file?.name);
     onImport(result.records, importMode, {
       source: 'drive',
       fileName: file?.name ?? result.fileName,
       modifiedTime: file?.modifiedTime,
       warnings: result.warnings,
       skippedCount: result.skippedCount,
+      nonDataCount: result.nonDataCount,
     });
 
     const warningText = result.skippedCount > 0
       ? ` ${result.skippedCount} ligne(s) ignorée(s) pour cause de données invalides.`
       : '';
+    const statusText = result.nonDataCount > 0
+      ? ` ${result.nonDataCount} ligne(s) de statut non analytique ignorée(s).`
+      : '';
     setStatus({
       tone: result.skippedCount > 0 ? 'warning' : 'success',
-      message: `${result.records.length} enregistrements chargés depuis ${file?.name ?? result.fileName} (${formatModifiedTime(file?.modifiedTime)}).${warningText}`,
+      message: `${result.records.length} enregistrements chargés depuis ${file?.name ?? result.fileName} (${formatModifiedTime(file?.modifiedTime)}).${warningText}${statusText}`,
     });
   };
 
@@ -57,7 +64,7 @@ export const DriveImportPanel: React.FC<DriveImportPanelProps> = ({ onImport }) 
     setStatus(null);
 
     try {
-      const availableFiles = await listDriveJsonFiles();
+      const availableFiles = await listDriveJsonFiles(accessToken);
       setFiles(availableFiles);
 
       if (availableFiles.length === 0) {
@@ -88,9 +95,9 @@ export const DriveImportPanel: React.FC<DriveImportPanelProps> = ({ onImport }) 
 
   useEffect(() => {
     void refreshFiles(mode === 'automatic');
-    // Le changement de mode est le déclencheur volontaire de la synchronisation.
+    // Le changement de mode ou la connexion OAuth déclenche une nouvelle lecture.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode]);
+  }, [mode, accessToken]);
 
   const handleManualLoad = async () => {
     if (!selectedFileId) return;
@@ -116,6 +123,8 @@ export const DriveImportPanel: React.FC<DriveImportPanelProps> = ({ onImport }) 
 
   return (
     <section className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md rounded-xl border border-slate-200/80 dark:border-slate-800/80 shadow-xs p-4 sm:p-5 space-y-4" aria-labelledby="drive-import-title">
+      <GoogleDriveLoginPanel onSignedIn={() => void refreshFiles(mode === 'automatic')} />
+
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400">

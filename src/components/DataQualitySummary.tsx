@@ -87,6 +87,7 @@ export const DataQualitySummary: React.FC<DataQualitySummaryProps> = ({ records,
         <span className="inline-flex items-center gap-1.5"><FileCheck2 className="w-3.5 h-3.5" /> Source : <strong className="text-slate-700 dark:text-slate-200">{sourceLabel}</strong></span>
         {lastImport && <span className="inline-flex items-center gap-1.5"><Clock3 className="w-3.5 h-3.5" /> Importé le {formatDate(lastImport.importedAt)}</span>}
         {lastImport && <span className="inline-flex items-center gap-1.5">{lastImport.importedCount} ajoutée(s), {lastImport.duplicateCount} doublon(s) évité(s)</span>}
+        {lastImport && (lastImport.nonDataCount ?? 0) > 0 && <span className="inline-flex items-center gap-1.5 text-slate-500">{lastImport.nonDataCount} ligne(s) de statut non analytique ignorée(s)</span>}
       </div>
     </section>
   );

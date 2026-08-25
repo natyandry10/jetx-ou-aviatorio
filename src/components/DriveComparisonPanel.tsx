@@ -3,6 +3,8 @@ import { AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart4, FileDiff, Minus
 import { JsonRecord } from '../types';
 import { calculateCoefficientStats } from '../utils/analytics';
 import { DriveFile, listDriveJsonFiles, loadDriveJsonFile } from '../utils/drive';
+import { useGoogleDriveAuth } from '../auth/GoogleDriveAuthContext';
+import { GoogleDriveLoginPanel } from './GoogleDriveLoginPanel';
 
 interface DriveComparisonPanelProps {
   initialFileAId?: string;
@@ -15,6 +17,7 @@ interface LoadedDataset {
   records: JsonRecord[];
   warnings: string[];
   skippedCount: number;
+  nonDataCount: number;
 }
 
 function formatModifiedTime(value?: string): string {
@@ -60,7 +63,7 @@ function DatasetCard({ dataset, accent }: { dataset: LoadedDataset; accent: 'ind
         <div><p className="text-[10px] text-slate-500 dark:text-slate-400">P90</p><p className="text-sm font-bold text-amber-600 dark:text-amber-300">{stats.count ? formatValue(stats.p90) : '—'}</p></div>
         <div><p className="text-[10px] text-slate-500 dark:text-slate-400">Valides</p><p className="text-sm font-bold text-slate-800 dark:text-slate-200">{stats.count}</p></div>
       </div>
-      {(dataset.skippedCount > 0 || dataset.warnings.length > 0) && <p className="mt-3 text-[10px] text-amber-700 dark:text-amber-300">{dataset.skippedCount} ligne(s) invalide(s) ignorée(s) · {dataset.warnings.length} avertissement(s).</p>}
+      {(dataset.skippedCount > 0 || dataset.warnings.length > 0 || dataset.nonDataCount > 0) && <p className="mt-3 text-[10px] text-amber-700 dark:text-amber-300">{dataset.skippedCount} ligne(s) invalide(s) · {dataset.warnings.length} avertissement(s) · {dataset.nonDataCount} statut(s) non analytique(s).</p>}
     </div>
   );
 }
@@ -73,6 +76,7 @@ export const DriveComparisonPanel: React.FC<DriveComparisonPanelProps> = ({ init
   const [isComparing, setIsComparing] = useState(false);
   const [datasets, setDatasets] = useState<[LoadedDataset, LoadedDataset] | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const { accessToken } = useGoogleDriveAuth();
 
   const sortedFiles = useMemo(() => [...files].sort((a, b) => (b.modifiedTime ?? '').localeCompare(a.modifiedTime ?? '')), [files]);
 
@@ -80,7 +84,7 @@ export const DriveComparisonPanel: React.FC<DriveComparisonPanelProps> = ({ init
     setIsLoadingFiles(true);
     setStatus(null);
     try {
-      const availableFiles = await listDriveJsonFiles();
+      const availableFiles = await listDriveJsonFiles(accessToken);
       setFiles(availableFiles);
       const nextFileAId = availableFiles.some((file) => file.id === fileAId) ? fileAId : availableFiles[0]?.id ?? '';
       const nextFileBId = availableFiles.some((file) => file.id === fileBId && file.id !== nextFileAId)
@@ -98,9 +102,9 @@ export const DriveComparisonPanel: React.FC<DriveComparisonPanelProps> = ({ init
 
   useEffect(() => {
     void refreshFiles();
-    // Le chargement initial est volontairement effectué une seule fois.
+    // Le chargement initial et la connexion OAuth déclenchent une lecture.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [accessToken]);
 
   useEffect(() => {
     onSelectionChange(fileAId, fileBId);
@@ -126,10 +130,13 @@ export const DriveComparisonPanel: React.FC<DriveComparisonPanelProps> = ({ init
     setIsComparing(true);
     setStatus(null);
     try {
-      const [resultA, resultB] = await Promise.all([loadDriveJsonFile(fileA.id), loadDriveJsonFile(fileB.id)]);
+      const [resultA, resultB] = await Promise.all([
+        loadDriveJsonFile(fileA.id, undefined, accessToken, fileA.name),
+        loadDriveJsonFile(fileB.id, undefined, accessToken, fileB.name),
+      ]);
       setDatasets([
-        { file: fileA, records: resultA.records, warnings: resultA.warnings, skippedCount: resultA.skippedCount },
-        { file: fileB, records: resultB.records, warnings: resultB.warnings, skippedCount: resultB.skippedCount },
+        { file: fileA, records: resultA.records, warnings: resultA.warnings, skippedCount: resultA.skippedCount, nonDataCount: resultA.nonDataCount },
+        { file: fileB, records: resultB.records, warnings: resultB.warnings, skippedCount: resultB.skippedCount, nonDataCount: resultB.nonDataCount },
       ]);
     } catch (error: unknown) {
       setStatus(error instanceof Error ? error.message : 'Impossible de charger les deux fichiers Drive.');
@@ -154,6 +161,8 @@ export const DriveComparisonPanel: React.FC<DriveComparisonPanelProps> = ({ init
 
   return (
     <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-850 p-5 sm:p-6 shadow-xs space-y-5" aria-labelledby="drive-comparison-title">
+      <GoogleDriveLoginPanel onSignedIn={() => void refreshFiles()} />
+
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <div className="p-2 rounded-xl bg-cyan-50 dark:bg-cyan-950/50 text-cyan-600 dark:text-cyan-400"><FileDiff className="w-5 h-5" /></div>

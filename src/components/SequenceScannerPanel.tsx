@@ -101,8 +101,11 @@ export const SequenceScannerPanel: React.FC<SequenceScannerPanelProps> = ({ reco
   const visiblePatterns = useMemo(() => result.patterns
     .filter((pattern) => mode === 'all' || pattern.mode === mode)
     .filter((pattern) => resultFilter === 'all' || pattern.nextByPosition.some((position) => position.aboveTenCount > 0))
-    .slice(0, 60), [mode, result.patterns, resultFilter]);
+    .slice(0, 150), [mode, result.patterns, resultFilter]);
   const selectedPattern = visiblePatterns.find((pattern) => pattern.id === selectedPatternId) ?? visiblePatterns[0] ?? null;
+  const trackedPatterns = useMemo(() => [...visiblePatterns]
+    .sort((left, right) => right.occurrences - left.occurrences || right.lastOccurrenceAt.localeCompare(left.lastOccurrenceAt))
+    .slice(0, 8), [visiblePatterns]);
   const temporalRows = selectedPattern?.temporal[granularity] ?? [];
   const threeSmallSummary = result.threeSmallToAboveTen;
   const threeSmallFirstPosition = threeSmallSummary.nextByPosition[0];
@@ -149,9 +152,14 @@ export const SequenceScannerPanel: React.FC<SequenceScannerPanelProps> = ({ reco
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 p-3"><p className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">Ordonnés</p><p className="mt-1 text-lg font-bold text-slate-900 dark:text-white">{result.orderedValidCount}</p><p className="text-[10px] text-slate-500 dark:text-slate-400">date + heure valides</p></div>
-        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 p-3"><p className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">Motifs trouvés</p><p className="mt-1 text-lg font-bold text-fuchsia-700 dark:text-fuchsia-300">{visiblePatterns.length}</p><p className="text-[10px] text-slate-500 dark:text-slate-400">après filtres, jusqu’à 60</p></div>
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 p-3"><p className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">Motifs trouvés</p><p className="mt-1 text-lg font-bold text-fuchsia-700 dark:text-fuchsia-300">{visiblePatterns.length}</p><p className="text-[10px] text-slate-500 dark:text-slate-400">après filtres, jusqu’à 150</p></div>
         <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 p-3"><p className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">Ignorés</p><p className="mt-1 text-lg font-bold text-amber-600 dark:text-amber-300">{result.ignoredCount}</p><p className="text-[10px] text-slate-500 dark:text-slate-400">date/coefficient invalide</p></div>
       </div>
+
+      {trackedPatterns.length > 0 && <div className="rounded-xl border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/60 dark:bg-indigo-950/20 p-4 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-[10px] uppercase tracking-wider font-bold text-indigo-700 dark:text-indigo-300">Suivi des séquences observées</p><p className="mt-1 text-[11px] text-indigo-900/80 dark:text-indigo-200/80">Les motifs les plus présents dans le résultat importé, classés par occurrences puis par récence.</p></div><span className="text-[10px] font-semibold text-indigo-700 dark:text-indigo-300">{trackedPatterns.length} suivi(s)</span></div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">{trackedPatterns.map((pattern) => { const firstPosition = pattern.nextByPosition[0]; return <button key={pattern.id} type="button" onClick={() => setSelectedPatternId(pattern.id)} className="rounded-lg border border-indigo-200/80 dark:border-indigo-800/70 bg-white/70 dark:bg-slate-900/50 p-2.5 text-left hover:border-indigo-400 dark:hover:border-indigo-600"><p className="truncate text-[10px] font-bold text-slate-800 dark:text-slate-100" title={pattern.label}>{pattern.label}</p><p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">{pattern.occurrences} occurrence(s) · dernière {formatDate(pattern.lastOccurrenceAt)}</p><p className="mt-1 text-[10px] font-semibold text-amber-700 dark:text-amber-300">+1 &gt;10x : {firstPosition ? formatRate(firstPosition.aboveTenRate) : '—'}</p></button>; })}</div>
+      </div>}
 
       <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/70 dark:bg-amber-950/30 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">

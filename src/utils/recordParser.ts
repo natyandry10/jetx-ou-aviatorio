@@ -5,6 +5,7 @@ export interface RecordParseResult {
   records: JsonRecord[];
   warnings: string[];
   skippedCount: number;
+  nonDataCount: number;
 }
 
 function isValidDate(value: unknown): value is string {
@@ -23,6 +24,7 @@ export function parseJsonRecords(input: unknown, source = 'JSON'): RecordParseRe
   const warnings: string[] = [];
   const records: JsonRecord[] = [];
   let skippedCount = 0;
+  let nonDataCount = 0;
 
   input.forEach((item, index) => {
     if (typeof item !== 'object' || item === null || Array.isArray(item)) {
@@ -34,6 +36,12 @@ export function parseJsonRecords(input: unknown, source = 'JSON'): RecordParseRe
     const sourceRecord = item as Record<string, unknown>;
     const dateBrute = sourceRecord.date_brute ?? sourceRecord.date ?? sourceRecord.timestamp;
     const dateUtc = sourceRecord.date_utc ?? sourceRecord.utc ?? dateBrute;
+    const marker = typeof dateBrute === 'string' ? dateBrute.trim().toUpperCase() : '';
+    const isNonDataStatus = (marker === 'JEU EN COURS' || marker === 'GAME IN PROGRESS') && typeof dateUtc === 'string' && dateUtc.trim() === '';
+    if (isNonDataStatus) {
+      nonDataCount += 1;
+      return;
+    }
     const coefficientValue = sourceRecord.coefficient ?? sourceRecord.multiplier ?? sourceRecord.coeff;
     const hash = sourceRecord.hash ?? sourceRecord.sha256;
     const coefficient = Number(coefficientValue);
@@ -70,5 +78,5 @@ export function parseJsonRecords(input: unknown, source = 'JSON'): RecordParseRe
     warnings.unshift(`${warnings.length} ligne(s) invalide(s) ignorée(s) dans ${source}.`);
   }
 
-  return { records, warnings, skippedCount };
+  return { records, warnings, skippedCount, nonDataCount };
 }

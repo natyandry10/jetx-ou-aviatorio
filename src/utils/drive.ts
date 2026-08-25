@@ -20,6 +20,9 @@ interface DriveFileContentResponse {
   error?: string;
 }
 
+const DIRECT_DRIVE_FOLDER_ID = import.meta.env.VITE_GOOGLE_DRIVE_FOLDER_ID?.trim() || '124twvdWV2AEkMk3_92v99RV_cDcEle8R';
+const DRIVE_API_BASE = 'https://www.googleapis.com/drive/v3';
+
 async function readJsonResponse<T>(response: Response): Promise<T> {
   let data: (T & { error?: string }) | null = null;
   try {
@@ -34,7 +37,17 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
   return data;
 }
 
-export async function listDriveJsonFiles(signal?: AbortSignal): Promise<DriveFile[]> {
+export async function listDriveJsonFiles(accessToken?: string, signal?: AbortSignal): Promise<DriveFile[]> {
+  if (accessToken && DIRECT_DRIVE_FOLDER_ID) {
+    const url = new URL(`${DRIVE_API_BASE}/files`);
+    url.searchParams.set('q', `'${DIRECT_DRIVE_FOLDER_ID}' in parents and trashed = false and mimeType = 'application/json'`);
+    url.searchParams.set('pageSize', '100');
+    url.searchParams.set('orderBy', 'modifiedTime desc');
+    url.searchParams.set('fields', 'files(id,name,mimeType,modifiedTime,size)');
+    const response = await fetch(url, { signal, headers: { Authorization: `Bearer ${accessToken}` } });
+    const data = await readJsonResponse<DriveFilesResponse>(response);
+    return data.files ?? [];
+  }
   const response = await fetch('/api/drive-files', { signal });
   const data = await readJsonResponse<DriveFilesResponse>(response);
   return data.files ?? [];
@@ -42,13 +55,24 @@ export async function listDriveJsonFiles(signal?: AbortSignal): Promise<DriveFil
 
 export async function loadDriveJsonFile(
   fileId: string,
-  signal?: AbortSignal
-): Promise<{ records: JsonRecord[]; warnings: string[]; skippedCount: number; fileName: string }> {
+  signal?: AbortSignal,
+  accessToken?: string,
+  fileNameHint?: string,
+): Promise<{ records: JsonRecord[]; warnings: string[]; skippedCount: number; nonDataCount: number; fileName: string }> {
+  if (accessToken && DIRECT_DRIVE_FOLDER_ID) {
+    const url = new URL(`${DRIVE_API_BASE}/files/${encodeURIComponent(fileId)}`);
+    url.searchParams.set('alt', 'media');
+    const response = await fetch(url, { signal, headers: { Authorization: `Bearer ${accessToken}` } });
+    const content = await readJsonResponse<unknown>(response);
+    const fileName = fileNameHint ?? 'fichier Drive';
+    const parsed = parseJsonRecords(content, fileName);
+    return { ...parsed, fileName };
+  }
   const url = new URL('/api/drive-file', window.location.origin);
   url.searchParams.set('fileId', fileId);
   const response = await fetch(url, { signal });
   const data = await readJsonResponse<DriveFileContentResponse>(response);
-  const fileName = data.name ?? 'fichier Drive';
+  const fileName = data.name ?? fileNameHint ?? 'fichier Drive';
   const parsed = parseJsonRecords(data.content, fileName);
   return { ...parsed, fileName };
 }

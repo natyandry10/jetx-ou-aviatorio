@@ -35,6 +35,7 @@ export interface ImportMetadata {
   modifiedTime?: string;
   warnings?: string[];
   skippedCount?: number;
+  nonDataCount?: number;
 }
 
 export interface ImportSummary extends ImportMetadata {
