@@ -2,16 +2,16 @@ import React from 'react';
 import { JsonRecord } from '../types';
 import { formatDateFrench, getCoefficientBadgeStyle } from '../utils/formatters';
 import { AnalyticsCharts } from './AnalyticsCharts';
-import { ToolsAnalysisPanel } from './ToolsAnalysisPanel';
-import { BarChart3, TrendingUp, Clock, Award, Layers, Hash, Sparkles, ArrowDown } from 'lucide-react';
+import { BarChart3, TrendingUp, Clock, Award, Layers, Hash, Sparkles, ArrowDown, Wrench } from 'lucide-react';
 
 interface StatsViewProps {
   records: JsonRecord[];
   filteredRecords: JsonRecord[];
   onNavigateToSaisie: () => void;
+  onNavigateToTools: () => void;
 }
 
-export const StatsView: React.FC<StatsViewProps> = ({ records, filteredRecords, onNavigateToSaisie }) => {
+export const StatsView: React.FC<StatsViewProps> = ({ records, filteredRecords, onNavigateToSaisie, onNavigateToTools }) => {
   const total = records.length;
   if (total === 0) {
     return (
@@ -74,12 +74,20 @@ export const StatsView: React.FC<StatsViewProps> = ({ records, filteredRecords, 
           </p>
         </div>
 
-        <button
-          onClick={onNavigateToSaisie}
-          className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-xs transition-colors"
-        >
-          Ouvrir la Saisie détaillée
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={onNavigateToSaisie}
+            className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-xs transition-colors"
+          >
+            Ouvrir la Saisie détaillée
+          </button>
+          <button
+            onClick={onNavigateToTools}
+            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-cyan-700 dark:text-cyan-300 bg-cyan-50 dark:bg-cyan-950/40 border border-cyan-200 dark:border-cyan-900/70 hover:bg-cyan-100 dark:hover:bg-cyan-900/50 rounded-xl shadow-xs transition-colors"
+          >
+            <Wrench className="h-3.5 w-3.5" /> Ouvrir Tools
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-fuchsia-200 dark:border-fuchsia-900/60 bg-gradient-to-r from-fuchsia-50 to-indigo-50 dark:from-fuchsia-950/40 dark:to-indigo-950/30 px-5 py-4 shadow-xs">
@@ -134,8 +142,6 @@ export const StatsView: React.FC<StatsViewProps> = ({ records, filteredRecords, 
           <p className="text-[11px] text-slate-400 mt-0.5">Multiplicateur plancher</p>
         </div>
       </div>
-
-      <ToolsAnalysisPanel records={filteredRecords} totalRecords={records.length} />
 
       <AnalyticsCharts records={records} />
 

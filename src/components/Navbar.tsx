@@ -1,5 +1,5 @@
 import React from 'react';
-import { Database, Home, Table2, BarChart3, Upload, Download, Plus } from 'lucide-react';
+import { Home, Table2, BarChart3, Wrench, Upload, Download, Plus } from 'lucide-react';
 import { ActiveTab } from '../types';
 
 interface NavbarProps {
@@ -31,7 +31,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="text-xs sm:text-sm font-bold uppercase text-slate-700 dark:text-slate-200 tracking-wider">
               {activeTab === 'accueil' && 'Rubrique : Accueil'}
               {activeTab === 'saisie' && 'Rubrique : Saisie & Données'}
-              {activeTab === 'statistiques' && 'Rubrique : Statistiques'}
+              {activeTab === 'analyse' && 'Rubrique : Analyse'}
+              {activeTab === 'tools' && 'Rubrique : Tools'}
             </span>
           </div>
 
@@ -69,16 +70,29 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
 
           <button
-            id="tab-statistiques"
-            onClick={() => onSelectTab('statistiques')}
+            id="tab-analyse"
+            onClick={() => onSelectTab('analyse')}
             className={`cursor-pointer px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
-              activeTab === 'statistiques'
+              activeTab === 'analyse'
                 ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-blue-50/50 dark:bg-blue-950/40 pb-1 font-bold'
                 : 'hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
             }`}
           >
             <BarChart3 className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Statistiques</span>
+            <span className="hidden sm:inline">Analyse</span>
+          </button>
+
+          <button
+            id="tab-tools"
+            onClick={() => onSelectTab('tools')}
+            className={`cursor-pointer px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+              activeTab === 'tools'
+                ? 'text-cyan-600 dark:text-cyan-400 border-b-2 border-cyan-600 dark:border-cyan-400 bg-cyan-50/50 dark:bg-cyan-950/40 pb-1 font-bold'
+                : 'hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
+            }`}
+          >
+            <Wrench className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Tools</span>
           </button>
         </div>
 

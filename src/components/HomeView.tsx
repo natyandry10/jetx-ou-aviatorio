@@ -1,11 +1,13 @@
 import React from 'react';
 import { JsonRecord } from '../types';
 import { formatDateFrench, getCoefficientBadgeStyle } from '../utils/formatters';
-import { Table2, Upload, Download, ArrowRight, Sparkles, Filter, Copy, Hash, Layers, CheckCircle2, TrendingUp, Award, ShieldCheck } from 'lucide-react';
+import { Table2, Upload, Download, ArrowRight, Sparkles, Filter, Copy, Hash, Layers, CheckCircle2, TrendingUp, Award, ShieldCheck, BarChart3, Wrench } from 'lucide-react';
 
 interface HomeViewProps {
   records: JsonRecord[];
   onNavigateToSaisie: () => void;
+  onNavigateToAnalyse: () => void;
+  onNavigateToTools: () => void;
   onOpenImport: () => void;
   onOpenExport: () => void;
 }
@@ -13,6 +15,8 @@ interface HomeViewProps {
 export const HomeView: React.FC<HomeViewProps> = ({
   records,
   onNavigateToSaisie,
+  onNavigateToAnalyse,
+  onNavigateToTools,
   onOpenImport,
   onOpenExport,
 }) => {
@@ -73,6 +77,24 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <Table2 className="w-4 h-4" />
               <span>Ouvrir la Saisie & Filtres</span>
               <ArrowRight className="w-4 h-4 ml-1" />
+            </button>
+
+            <button
+              id="home-btn-analyse"
+              onClick={onNavigateToAnalyse}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white bg-white/10 hover:bg-white/20 border border-white/20 backdrop-blur-md transition-all cursor-pointer"
+            >
+              <BarChart3 className="w-4 h-4" />
+              <span>Analyse</span>
+            </button>
+
+            <button
+              id="home-btn-tools"
+              onClick={onNavigateToTools}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white bg-white/10 hover:bg-white/20 border border-white/20 backdrop-blur-md transition-all cursor-pointer"
+            >
+              <Wrench className="w-4 h-4" />
+              <span>Tools</span>
             </button>
 
             <button

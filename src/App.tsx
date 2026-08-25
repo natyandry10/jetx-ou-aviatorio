@@ -16,6 +16,7 @@ import { Navbar } from './components/Navbar';
 import { HomeView } from './components/HomeView';
 import { SaisieView } from './components/SaisieView';
 import { StatsView } from './components/StatsView';
+import { ToolsView } from './components/ToolsView';
 import { ImportModal } from './components/ImportModal';
 import { ExportModal } from './components/ExportModal';
 import { EditRecordModal } from './components/EditRecordModal';
@@ -230,6 +231,8 @@ export default function App() {
           <HomeView
             records={records}
             onNavigateToSaisie={() => setActiveTab('saisie')}
+            onNavigateToAnalyse={() => setActiveTab('analyse')}
+            onNavigateToTools={() => setActiveTab('tools')}
             onOpenImport={() => setIsImportOpen(true)}
             onOpenExport={() => setIsExportOpen(true)}
           />
@@ -264,11 +267,21 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'statistiques' && (
+        {activeTab === 'analyse' && (
           <StatsView
             records={records}
             filteredRecords={filteredRecords}
             onNavigateToSaisie={() => setActiveTab('saisie')}
+            onNavigateToTools={() => setActiveTab('tools')}
+          />
+        )}
+
+        {activeTab === 'tools' && (
+          <ToolsView
+            records={records}
+            filteredRecords={filteredRecords}
+            onNavigateToSaisie={() => setActiveTab('saisie')}
+            onNavigateToAnalyse={() => setActiveTab('analyse')}
           />
         )}
       </main>
