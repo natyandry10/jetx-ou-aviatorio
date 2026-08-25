@@ -230,3 +230,257 @@ export function getTopHourlyStats(stats: HourlyStat[], limit = 3): HourlyStat[] 
 export function formatHour(hour: number): string {
   return `${String(hour).padStart(2, '0')}h`;
 }
+
+
+export type SequenceAnalysisMode = 'exact' | 'low-high';
+export type SequenceTemporalGranularity = 'hour' | 'day' | 'month' | 'year';
+
+export interface SequenceScannerConfig {
+  minLength: number;
+  maxLength: number;
+  lookahead: number;
+  lowThreshold: number;
+  triggerThreshold: number;
+  targetThreshold: number;
+  exactPrecision: number;
+}
+
+export const DEFAULT_SEQUENCE_SCANNER_CONFIG: SequenceScannerConfig = {
+  minLength: 2,
+  maxLength: 6,
+  lookahead: 5,
+  lowThreshold: 1.45,
+  triggerThreshold: 4,
+  targetThreshold: 4,
+  exactPrecision: 2,
+};
+
+export interface SequencePositionSummary {
+  position: number;
+  sampleCount: number;
+  aboveTargetCount: number;
+  aboveTargetRate: number;
+  mean: number;
+  median: number;
+  p90: number;
+  maximum: number;
+}
+
+export interface SequenceTemporalSummary {
+  key: string;
+  label: string;
+  occurrences: number;
+  nextEvaluatedCount: number;
+  aboveTargetCount: number;
+  aboveTargetRate: number;
+}
+
+export interface SequencePatternResult {
+  id: string;
+  mode: SequenceAnalysisMode;
+  length: number;
+  label: string;
+  triggerLabel?: string;
+  occurrences: number;
+  firstOccurrenceAt: string;
+  lastOccurrenceAt: string;
+  nextByPosition: SequencePositionSummary[];
+  temporal: Record<SequenceTemporalGranularity, SequenceTemporalSummary[]>;
+}
+
+export interface SequenceScannerResult {
+  orderedValidCount: number;
+  ignoredCount: number;
+  patterns: SequencePatternResult[];
+}
+
+interface SequenceOccurrence {
+  timestamp: number;
+  nextRecords: JsonRecord[];
+}
+
+interface MutableSequencePattern {
+  id: string;
+  mode: SequenceAnalysisMode;
+  length: number;
+  label: string;
+  triggerLabel?: string;
+  occurrences: SequenceOccurrence[];
+}
+
+function roundToPrecision(value: number, precision: number): number {
+  const factor = 10 ** Math.max(0, precision);
+  return Math.round(value * factor) / factor;
+}
+
+function sameCoefficient(left: number, right: number, precision: number): boolean {
+  return roundToPrecision(left, precision) === roundToPrecision(right, precision);
+}
+
+function formatThreshold(value: number): string {
+  return `${value.toFixed(2)}x`;
+}
+
+function formatSequenceTimestamp(timestamp: number, granularity: SequenceTemporalGranularity): { key: string; label: string } {
+  const date = new Date(timestamp);
+  if (granularity === 'hour') {
+    const key = String(date.getHours()).padStart(2, '0');
+    return { key, label: `${key}h` };
+  }
+  if (granularity === 'day') {
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    return { key, label: new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }).format(date) };
+  }
+  if (granularity === 'month') {
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    return { key, label: new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' }).format(date) };
+  }
+  const key = String(date.getFullYear());
+  return { key, label: key };
+}
+
+function summarizeSequenceValues(values: number[], targetThreshold: number, position: number): SequencePositionSummary {
+  const sorted = [...values].sort((a, b) => a - b);
+  const sampleCount = sorted.length;
+  if (sampleCount === 0) {
+    return { position, sampleCount: 0, aboveTargetCount: 0, aboveTargetRate: 0, mean: 0, median: 0, p90: 0, maximum: 0 };
+  }
+  const percentile = (ratio: number): number => {
+    const index = (sorted.length - 1) * ratio;
+    const lower = Math.floor(index);
+    const upper = Math.ceil(index);
+    return lower === upper ? sorted[lower] : sorted[lower] + (sorted[upper] - sorted[lower]) * (index - lower);
+  };
+  const aboveTargetCount = sorted.filter((value) => value > targetThreshold).length;
+  return {
+    position,
+    sampleCount,
+    aboveTargetCount,
+    aboveTargetRate: aboveTargetCount / sampleCount,
+    mean: sorted.reduce((sum, value) => sum + value, 0) / sampleCount,
+    median: percentile(0.5),
+    p90: percentile(0.9),
+    maximum: sorted[sorted.length - 1],
+  };
+}
+
+function finalizeSequencePattern(pattern: MutableSequencePattern, config: SequenceScannerConfig): SequencePatternResult {
+  const timestamps = pattern.occurrences.map((occurrence) => occurrence.timestamp).sort((a, b) => a - b);
+  const nextByPosition = Array.from({ length: config.lookahead }, (_, index) => {
+    const values = pattern.occurrences
+      .map((occurrence) => occurrence.nextRecords[index]?.coefficient)
+      .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+    return summarizeSequenceValues(values, config.targetThreshold, index + 1);
+  });
+  const temporal = {} as Record<SequenceTemporalGranularity, SequenceTemporalSummary[]>;
+  (['hour', 'day', 'month', 'year'] as SequenceTemporalGranularity[]).forEach((granularity) => {
+    const buckets = new Map<string, { label: string; occurrences: number; nextEvaluatedCount: number; aboveTargetCount: number }>();
+    pattern.occurrences.forEach((occurrence) => {
+      const bucket = formatSequenceTimestamp(occurrence.timestamp, granularity);
+      const current = buckets.get(bucket.key) ?? { label: bucket.label, occurrences: 0, nextEvaluatedCount: 0, aboveTargetCount: 0 };
+      current.occurrences += 1;
+      const nextValue = occurrence.nextRecords[0]?.coefficient;
+      if (typeof nextValue === 'number' && Number.isFinite(nextValue)) {
+        current.nextEvaluatedCount += 1;
+        if (nextValue > config.targetThreshold) current.aboveTargetCount += 1;
+      }
+      buckets.set(bucket.key, current);
+    });
+    temporal[granularity] = [...buckets.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, value]) => ({
+        key,
+        label: value.label,
+        occurrences: value.occurrences,
+        nextEvaluatedCount: value.nextEvaluatedCount,
+        aboveTargetCount: value.aboveTargetCount,
+        aboveTargetRate: value.nextEvaluatedCount > 0 ? value.aboveTargetCount / value.nextEvaluatedCount : 0,
+      }));
+  });
+
+  return {
+    id: pattern.id,
+    mode: pattern.mode,
+    length: pattern.length,
+    label: pattern.label,
+    triggerLabel: pattern.triggerLabel,
+    occurrences: pattern.occurrences.length,
+    firstOccurrenceAt: new Date(timestamps[0]).toISOString(),
+    lastOccurrenceAt: new Date(timestamps[timestamps.length - 1]).toISOString(),
+    nextByPosition,
+    temporal,
+  };
+}
+
+export function scanConditionalSequences(records: JsonRecord[], inputConfig: Partial<SequenceScannerConfig> = {}): SequenceScannerResult {
+  const config: SequenceScannerConfig = {
+    ...DEFAULT_SEQUENCE_SCANNER_CONFIG,
+    ...inputConfig,
+    minLength: Math.max(2, Math.floor(inputConfig.minLength ?? DEFAULT_SEQUENCE_SCANNER_CONFIG.minLength)),
+    maxLength: Math.max(2, Math.floor(inputConfig.maxLength ?? DEFAULT_SEQUENCE_SCANNER_CONFIG.maxLength)),
+    lookahead: Math.max(1, Math.floor(inputConfig.lookahead ?? DEFAULT_SEQUENCE_SCANNER_CONFIG.lookahead)),
+  };
+  if (config.maxLength < config.minLength) config.maxLength = config.minLength;
+
+  const orderedRecords = records
+    .map((record) => ({ record, timestamp: getValidTimestamp(record) }))
+    .filter((item): item is { record: JsonRecord; timestamp: number } => item.timestamp !== null && Number.isFinite(item.record.coefficient))
+    .sort((left, right) => left.timestamp - right.timestamp || left.record.id.localeCompare(right.record.id));
+  const ordered = orderedRecords.map((item) => item.record);
+  const timestamps = orderedRecords.map((item) => item.timestamp);
+  const patternMap = new Map<string, MutableSequencePattern>();
+
+  const addOccurrence = (pattern: MutableSequencePattern, startIndex: number, nextStartIndex: number) => {
+    pattern.occurrences.push({
+      timestamp: timestamps[startIndex],
+      nextRecords: ordered.slice(nextStartIndex, nextStartIndex + config.lookahead),
+    });
+  };
+
+  for (let length = config.minLength; length <= config.maxLength; length += 1) {
+    for (let start = 0; start + length < ordered.length; start += 1) {
+      const firstCoefficient = ordered[start].coefficient;
+      const repeated = ordered.slice(start, start + length).every((record) => sameCoefficient(record.coefficient, firstCoefficient, config.exactPrecision));
+      if (repeated) {
+        const token = roundToPrecision(firstCoefficient, config.exactPrecision).toFixed(config.exactPrecision);
+        const id = `exact:${length}:${token}`;
+        const pattern = patternMap.get(id) ?? {
+          id,
+          mode: 'exact',
+          length,
+          label: `${formatThreshold(Number(token))} répété ${length} fois`,
+          occurrences: [],
+        };
+        addOccurrence(pattern, start, start + length);
+        patternMap.set(id, pattern);
+      }
+
+      const lowSequence = ordered.slice(start, start + length).every((record) => record.coefficient <= config.lowThreshold);
+      const trigger = ordered[start + length]?.coefficient;
+      if (lowSequence && typeof trigger === 'number' && trigger > config.triggerThreshold) {
+        const id = `low-high:${length}:${config.lowThreshold}:${config.triggerThreshold}`;
+        const pattern = patternMap.get(id) ?? {
+          id,
+          mode: 'low-high',
+          length,
+          label: `≤ ${formatThreshold(config.lowThreshold)} pendant ${length} résultats`,
+          triggerLabel: `puis > ${formatThreshold(config.triggerThreshold)}`,
+          occurrences: [],
+        };
+        addOccurrence(pattern, start, start + length + 1);
+        patternMap.set(id, pattern);
+      }
+    }
+  }
+
+  const patterns = [...patternMap.values()]
+    .filter((pattern) => pattern.occurrences.length > 0)
+    .map((pattern) => finalizeSequencePattern(pattern, config))
+    .sort((left, right) => right.occurrences - left.occurrences || left.length - right.length || left.label.localeCompare(right.label));
+
+  return {
+    orderedValidCount: ordered.length,
+    ignoredCount: records.length - ordered.length,
+    patterns,
+  };
+}

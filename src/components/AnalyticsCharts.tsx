@@ -3,6 +3,7 @@ import { Activity, BarChart3, CalendarDays, Clock3, Info, Scale, TrendingUp } fr
 import { JsonRecord } from '../types';
 import { AdvancedStatsPanel } from './AdvancedStatsPanel';
 import { DriveComparisonPanel } from './DriveComparisonPanel';
+import { SequenceScannerPanel } from './SequenceScannerPanel';
 import {
   AnalyticsPeriod,
   AnalyticsPeriodPreset,
@@ -224,6 +225,8 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ records }) => 
           </div>
         )}
       </section>
+
+      <SequenceScannerPanel records={periodRecords} />
 
       <AdvancedStatsPanel records={records} period={period} />
 
