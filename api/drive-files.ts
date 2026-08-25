@@ -27,8 +27,14 @@ function getDriveConfig(): { apiKey: string; folderId: string } | null {
   return { apiKey, folderId };
 }
 
+function isJsonFile(file: DriveFile): boolean {
+  return file.mimeType === 'application/json'
+    || file.mimeType === 'text/json'
+    || file.name.toLowerCase().endsWith('.json');
+}
+
 export default async function handler(req: ApiRequest, res: ApiResponse): Promise<void> {
-  res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
 
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
@@ -45,7 +51,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
   const url = new URL('https://www.googleapis.com/drive/v3/files');
   url.searchParams.set(
     'q',
-    `'${config.folderId}' in parents and trashed = false and mimeType = 'application/json'`
+    `'${config.folderId}' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'`
   );
   url.searchParams.set('orderBy', 'modifiedTime desc');
   url.searchParams.set('pageSize', '100');
@@ -61,7 +67,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
 
     const data = (await response.json()) as DriveFileListResponse;
     const files = (data.files ?? []).filter(
-      (file) => file.id && file.name && file.mimeType === 'application/json'
+      (file) => file.id && file.name && isJsonFile(file)
     );
     res.status(200).json({ files });
   } catch {

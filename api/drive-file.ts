@@ -31,8 +31,14 @@ function getQueryValue(value: string | string[] | undefined): string | null {
   return value ?? null;
 }
 
+function isJsonFile(file: DriveFileResponse): boolean {
+  return file.mimeType === 'application/json'
+    || file.mimeType === 'text/json'
+    || file.name.toLowerCase().endsWith('.json');
+}
+
 export default async function handler(req: ApiRequest, res: ApiResponse): Promise<void> {
-  res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
 
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
@@ -51,7 +57,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
     const folderFilesUrl = new URL('https://www.googleapis.com/drive/v3/files');
     folderFilesUrl.searchParams.set(
       'q',
-      `'${config.folderId}' in parents and trashed = false and mimeType = 'application/json'`
+      `'${config.folderId}' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'`
     );
     folderFilesUrl.searchParams.set('pageSize', '100');
     folderFilesUrl.searchParams.set('fields', 'files(id,name,mimeType)');
@@ -64,7 +70,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
     }
 
     const folderFiles = (await folderFilesResponse.json()) as DriveFileListResponse;
-    const metadata = folderFiles.files?.find((file) => file.id === fileId);
+    const metadata = folderFiles.files?.find((file) => file.id === fileId && isJsonFile(file));
     if (!metadata) {
       res.status(403).json({ error: 'Le fichier ne se trouve pas dans le dossier Drive configuré.' });
       return;
