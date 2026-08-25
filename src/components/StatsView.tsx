@@ -2,14 +2,16 @@ import React from 'react';
 import { JsonRecord } from '../types';
 import { formatDateFrench, getCoefficientBadgeStyle } from '../utils/formatters';
 import { AnalyticsCharts } from './AnalyticsCharts';
+import { ToolsAnalysisPanel } from './ToolsAnalysisPanel';
 import { BarChart3, TrendingUp, Clock, Award, Layers, Hash, Sparkles, ArrowDown } from 'lucide-react';
 
 interface StatsViewProps {
   records: JsonRecord[];
+  filteredRecords: JsonRecord[];
   onNavigateToSaisie: () => void;
 }
 
-export const StatsView: React.FC<StatsViewProps> = ({ records, onNavigateToSaisie }) => {
+export const StatsView: React.FC<StatsViewProps> = ({ records, filteredRecords, onNavigateToSaisie }) => {
   const total = records.length;
   if (total === 0) {
     return (
@@ -132,6 +134,8 @@ export const StatsView: React.FC<StatsViewProps> = ({ records, onNavigateToSaisi
           <p className="text-[11px] text-slate-400 mt-0.5">Multiplicateur plancher</p>
         </div>
       </div>
+
+      <ToolsAnalysisPanel records={filteredRecords} totalRecords={records.length} />
 
       <AnalyticsCharts records={records} />
 

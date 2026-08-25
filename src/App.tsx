@@ -267,6 +267,7 @@ export default function App() {
         {activeTab === 'statistiques' && (
           <StatsView
             records={records}
+            filteredRecords={filteredRecords}
             onNavigateToSaisie={() => setActiveTab('saisie')}
           />
         )}
