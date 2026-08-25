@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Activity, BarChart3, CalendarDays, Clock3, Info, Scale, TrendingUp } from 'lucide-react';
 import { JsonRecord } from '../types';
+import { AdvancedStatsPanel } from './AdvancedStatsPanel';
 import {
   AnalyticsPeriod,
   AnalyticsPeriodPreset,
@@ -190,6 +191,8 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ records }) => 
           </div>
         )}
       </section>
+
+      <AdvancedStatsPanel records={records} period={period} />
 
       <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-850 p-5 sm:p-6 shadow-xs" aria-labelledby="hourly-analysis-title">
         <div className="flex flex-wrap items-start justify-between gap-3">
