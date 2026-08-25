@@ -28,3 +28,30 @@ export interface SortConfig {
 }
 
 export type ActiveTab = 'accueil' | 'saisie' | 'statistiques';
+
+export interface ImportMetadata {
+  source: 'local' | 'drive';
+  fileName: string;
+  modifiedTime?: string;
+  warnings?: string[];
+  skippedCount?: number;
+}
+
+export interface ImportSummary extends ImportMetadata {
+  mode: 'replace' | 'append';
+  receivedCount: number;
+  importedCount: number;
+  duplicateCount: number;
+  importedAt: string;
+}
+
+export type DriveSyncState = 'idle' | 'loading' | 'success' | 'error';
+
+export interface DriveSyncStatus {
+  state: DriveSyncState;
+  message?: string;
+  fileName?: string;
+  modifiedTime?: string;
+  syncedAt?: string;
+  availableFiles?: number;
+}

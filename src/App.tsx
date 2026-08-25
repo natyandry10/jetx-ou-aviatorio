@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { JsonRecord, FilterState, SortConfig, SortField, ActiveTab } from './types';
+import { ImportMetadata, ImportSummary, JsonRecord, FilterState, SortConfig, SortField, ActiveTab } from './types';
 import { getInitialRecords } from './data/initialData';
 import {
   filterAndSortRecords,
@@ -41,6 +41,7 @@ export default function App() {
     direction: 'desc',
   });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [lastImportSummary, setLastImportSummary] = useState<ImportSummary | null>(null);
 
   useEffect(() => {
     persistRecords(records);
@@ -150,14 +151,39 @@ export default function App() {
   };
 
   // Import handler
-  const handleImportRecords = (newRecords: JsonRecord[], mode: 'replace' | 'append') => {
+  const handleImportRecords = (
+    newRecords: JsonRecord[],
+    mode: 'replace' | 'append',
+    metadata?: ImportMetadata,
+  ) => {
+    const existingHashes = mode === 'append' ? new Set(records.map((record) => record.hash)) : new Set<string>();
+    const seenHashes = new Set(existingHashes);
+    const uniqueRecords = newRecords.filter((record) => {
+      if (!record.hash || seenHashes.has(record.hash)) return false;
+      seenHashes.add(record.hash);
+      return true;
+    });
+    const duplicateCount = newRecords.length - uniqueRecords.length;
+
     if (mode === 'replace') {
-      setRecords(newRecords);
+      setRecords(uniqueRecords);
       setSelectedIds(new Set());
-    } else {
-      setRecords((prev) => [...newRecords, ...prev]);
+    } else if (uniqueRecords.length > 0) {
+      setRecords((prev) => [...uniqueRecords, ...prev]);
     }
-    // Switch directly to Saisie tab to view results
+
+    setLastImportSummary({
+      source: metadata?.source ?? 'local',
+      fileName: metadata?.fileName ?? 'JSON importé',
+      modifiedTime: metadata?.modifiedTime,
+      warnings: metadata?.warnings,
+      skippedCount: metadata?.skippedCount ?? 0,
+      mode,
+      receivedCount: newRecords.length,
+      importedCount: uniqueRecords.length,
+      duplicateCount,
+      importedAt: new Date().toISOString(),
+    });
     setActiveTab('saisie');
   };
 
@@ -167,6 +193,7 @@ export default function App() {
       setRecords(getInitialRecords());
       setSelectedIds(new Set());
       setFilters(INITIAL_FILTER_STATE);
+      setLastImportSummary(null);
     }
   };
 
@@ -218,6 +245,7 @@ export default function App() {
             onOpenImport={() => setIsImportOpen(true)}
             onOpenExport={() => setIsExportOpen(true)}
             onImportRecords={handleImportRecords}
+            lastImportSummary={lastImportSummary}
             onRestoreInitialData={handleRestoreInitialData}
           />
         )}

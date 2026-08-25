@@ -37,7 +37,7 @@ export async function listDriveJsonFiles(signal?: AbortSignal): Promise<DriveFil
 export async function loadDriveJsonFile(
   fileId: string,
   signal?: AbortSignal
-): Promise<{ records: JsonRecord[]; warnings: string[]; fileName: string }> {
+): Promise<{ records: JsonRecord[]; warnings: string[]; skippedCount: number; fileName: string }> {
   const url = new URL('/api/drive-file', window.location.origin);
   url.searchParams.set('fileId', fileId);
   const response = await fetch(url, { signal });

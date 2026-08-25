@@ -4,6 +4,7 @@ import { createRecordId } from './storage';
 export interface RecordParseResult {
   records: JsonRecord[];
   warnings: string[];
+  skippedCount: number;
 }
 
 function isValidDate(value: unknown): value is string {
@@ -21,9 +22,11 @@ export function parseJsonRecords(input: unknown, source = 'JSON'): RecordParseRe
 
   const warnings: string[] = [];
   const records: JsonRecord[] = [];
+  let skippedCount = 0;
 
   input.forEach((item, index) => {
     if (typeof item !== 'object' || item === null || Array.isArray(item)) {
+      skippedCount += 1;
       warnings.push(`Ligne ${index + 1} ignorée : l'élément n'est pas un objet.`);
       return;
     }
@@ -45,6 +48,7 @@ export function parseJsonRecords(input: unknown, source = 'JSON'): RecordParseRe
     if (!normalizedHash) problems.push('hash invalide');
 
     if (problems.length > 0) {
+      skippedCount += 1;
       warnings.push(`Ligne ${index + 1} ignorée : ${problems.join(', ')}.`);
       return;
     }
@@ -66,5 +70,5 @@ export function parseJsonRecords(input: unknown, source = 'JSON'): RecordParseRe
     warnings.unshift(`${warnings.length} ligne(s) invalide(s) ignorée(s) dans ${source}.`);
   }
 
-  return { records, warnings };
+  return { records, warnings, skippedCount };
 }

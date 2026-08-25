@@ -1,12 +1,12 @@
 import React, { useState, useRef } from 'react';
-import { JsonRecord } from '../types';
+import { ImportMetadata, JsonRecord } from '../types';
 import { parseJsonRecords } from '../utils/recordParser';
 import { Upload, FileCode, CheckCircle2, AlertTriangle, X } from 'lucide-react';
 
 interface ImportModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onImport: (newRecords: JsonRecord[], mode: 'replace' | 'append') => void;
+  onImport: (newRecords: JsonRecord[], mode: 'replace' | 'append', metadata?: ImportMetadata) => void;
 }
 
 export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport }) => {
@@ -15,6 +15,9 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
   const [importMode, setImportMode] = useState<'replace' | 'append'>('replace');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [parsedPreview, setParsedPreview] = useState<JsonRecord[] | null>(null);
+  const [parseWarnings, setParseWarnings] = useState<string[]>([]);
+  const [parseSkippedCount, setParseSkippedCount] = useState(0);
+  const [sourceFileName, setSourceFileName] = useState('JSON local');
   const [activeTab, setActiveTab] = useState<'file' | 'text'>('file');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -23,6 +26,8 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
   const processJsonString = (content: string) => {
     setErrorMsg(null);
     setParsedPreview(null);
+    setParseWarnings([]);
+    setParseSkippedCount(0);
 
     if (content.trim() === '') return;
 
@@ -30,6 +35,8 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
       const parsed = JSON.parse(content);
       const result = parseJsonRecords(parsed, 'Le JSON');
       setParsedPreview(result.records);
+      setParseWarnings(result.warnings);
+      setParseSkippedCount(result.skippedCount);
       if (result.warnings.length > 0) {
         setErrorMsg(result.warnings.join(' '));
       }
@@ -41,6 +48,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setSourceFileName(file.name);
     const reader = new FileReader();
     reader.onload = (event) => {
       const content = event.target?.result as string;
@@ -54,6 +62,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
     setDragActive(false);
     const file = e.dataTransfer.files?.[0];
     if (!file) return;
+    setSourceFileName(file.name);
     const reader = new FileReader();
     reader.onload = (event) => {
       const content = event.target?.result as string;
@@ -64,12 +73,20 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
 
   const handleConfirmImport = () => {
     if (!parsedPreview || parsedPreview.length === 0) return;
-    onImport(parsedPreview, importMode);
+    onImport(parsedPreview, importMode, {
+      source: 'local',
+      fileName: sourceFileName,
+      warnings: parseWarnings,
+      skippedCount: parseSkippedCount,
+    });
     onClose();
     // reset
     setParsedPreview(null);
     setRawText('');
     setErrorMsg(null);
+    setParseWarnings([]);
+    setParseSkippedCount(0);
+    setSourceFileName('JSON local');
   };
 
   return (
@@ -163,6 +180,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImp
               placeholder="Collez ici le JSON complet (ex: [{ &quot;date_brute&quot;: &quot;...&quot;, &quot;coefficient&quot;: 1.5, ... }])"
               value={rawText}
               onChange={(e) => {
+                setSourceFileName('JSON collé');
                 setRawText(e.target.value);
                 processJsonString(e.target.value);
               }}

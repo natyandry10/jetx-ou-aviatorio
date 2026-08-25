@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { AlertTriangle, CloudDownload, RefreshCw } from 'lucide-react';
-import { JsonRecord } from '../types';
+import { ImportMetadata, JsonRecord } from '../types';
 import { DriveFile, listDriveJsonFiles, loadDriveJsonFile } from '../utils/drive';
 
 interface DriveImportPanelProps {
-  onImport: (records: JsonRecord[], mode: 'replace' | 'append') => void;
+  onImport: (records: JsonRecord[], mode: 'replace' | 'append', metadata?: ImportMetadata) => void;
 }
 
 type DriveMode = 'automatic' | 'manual';
@@ -35,12 +35,20 @@ export const DriveImportPanel: React.FC<DriveImportPanelProps> = ({ onImport }) 
   const loadFile = async (fileId: string, availableFiles: DriveFile[]) => {
     const file = availableFiles.find((candidate) => candidate.id === fileId);
     const result = await loadDriveJsonFile(fileId);
-    onImport(result.records, importMode);
+    onImport(result.records, importMode, {
+      source: 'drive',
+      fileName: file?.name ?? result.fileName,
+      modifiedTime: file?.modifiedTime,
+      warnings: result.warnings,
+      skippedCount: result.skippedCount,
+    });
 
-    const warningText = result.warnings.length > 0 ? ` ${result.warnings.join(' ')}` : '';
+    const warningText = result.skippedCount > 0
+      ? ` ${result.skippedCount} ligne(s) ignorée(s) pour cause de données invalides.`
+      : '';
     setStatus({
-      tone: result.warnings.length > 0 ? 'warning' : 'success',
-      message: `${result.records.length} enregistrements chargés depuis ${file?.name ?? result.fileName}.${warningText}`,
+      tone: result.skippedCount > 0 ? 'warning' : 'success',
+      message: `${result.records.length} enregistrements chargés depuis ${file?.name ?? result.fileName} (${formatModifiedTime(file?.modifiedTime)}).${warningText}`,
     });
   };
 

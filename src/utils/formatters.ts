@@ -308,15 +308,16 @@ export function downloadJsonFile(records: JsonRecord[], fileName = 'donnees_expo
 }
 
 export function downloadCsvFile(records: JsonRecord[], fileName = 'donnees_export.csv'): void {
-  const headers = ['date_brute', 'date_utc', 'coefficient', 'hash'];
+  const escapeCsvCell = (value: string | number): string => `"${String(value).replace(/"/g, '""')}"`;
+  const headers = ['date_brute', 'date_utc', 'coefficient', 'hash'].map(escapeCsvCell);
   const rows = records.map((r) => [
-    `"${r.date_brute}"`,
-    `"${r.date_utc}"`,
-    r.coefficient,
-    `"${r.hash}"`
+    escapeCsvCell(r.date_brute),
+    escapeCsvCell(r.date_utc),
+    escapeCsvCell(r.coefficient),
+    escapeCsvCell(r.hash),
   ]);
-  const csvContent = [headers.join(','), ...rows.map((row) => row.join(','))].join('\n');
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const csvContent = [headers.join(';'), ...rows.map((row) => row.join(';'))].join('\r\n');
+  const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

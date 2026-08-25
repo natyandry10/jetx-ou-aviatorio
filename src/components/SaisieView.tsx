@@ -1,8 +1,9 @@
 import React from 'react';
-import { JsonRecord, FilterState, SortConfig, SortField } from '../types';
+import { ImportMetadata, ImportSummary, JsonRecord, FilterState, SortConfig, SortField } from '../types';
 import { FilterBar } from './FilterBar';
 import { DataTable } from './DataTable';
 import { DriveImportPanel } from './DriveImportPanel';
+import { DataQualitySummary } from './DataQualitySummary';
 import { Plus, Upload, Download, RotateCcw } from 'lucide-react';
 
 interface SaisieViewProps {
@@ -27,7 +28,8 @@ interface SaisieViewProps {
   onDeleteRecord: (id: string) => void;
   onOpenImport: () => void;
   onOpenExport: () => void;
-  onImportRecords: (records: JsonRecord[], mode: 'replace' | 'append') => void;
+  onImportRecords: (records: JsonRecord[], mode: 'replace' | 'append', metadata?: ImportMetadata) => void;
+  lastImportSummary: ImportSummary | null;
   onRestoreInitialData: () => void;
 }
 
@@ -54,6 +56,7 @@ export const SaisieView: React.FC<SaisieViewProps> = ({
   onOpenImport,
   onOpenExport,
   onImportRecords,
+  lastImportSummary,
   onRestoreInitialData,
 }) => {
   return (
@@ -127,6 +130,8 @@ export const SaisieView: React.FC<SaisieViewProps> = ({
       />
 
       <DriveImportPanel onImport={onImportRecords} />
+
+      <DataQualitySummary records={records} lastImport={lastImportSummary} />
 
       {/* Data Table */}
       <DataTable
