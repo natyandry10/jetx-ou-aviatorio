@@ -23,6 +23,14 @@ export interface SimilarityMatch {
   nextTarget: { timestamp: string; coefficient: number; delaySeconds: number } | null;
 }
 
+export interface DominantInterval {
+  label: string;
+  lowerSeconds: number;
+  upperSeconds: number | null;
+  count: number;
+  sampleSize: number;
+}
+
 export interface SimilarityResult {
   orderedValidCount: number;
   currentWindow: SimilarityStep[];
@@ -34,15 +42,20 @@ export interface SimilarityResult {
   targetCount: number;
   noTargetCount: number;
   targetRate: number;
-  medianDelaySeconds: number | null;
+  centralDelaySeconds: number | null;
+  delayP25Seconds: number | null;
+  delayP75Seconds: number | null;
   minDelaySeconds: number | null;
   maxDelaySeconds: number | null;
+  dominantInterval: DominantInterval | null;
   matchMode: 'band-and-interval' | 'bands-only-fallback' | 'none';
   calculationRoute: 'historical' | 'direct';
-  medianTargetCoefficient: number | null;
+  centralTargetCoefficient: number | null;
   p25TargetCoefficient: number | null;
   p75TargetCoefficient: number | null;
   estimatedNextTimestamp: string | null;
+  delayMethod: 'trimmed-mean-20%' | 'arithmetic-mean-small-sample' | null;
+  coefficientMethod: 'geometric-mean' | null;
 }
 
 const DEFAULT_CONFIG: SimilarityConfig = {
@@ -89,11 +102,23 @@ function signature(window: TimedRecord[], config: SimilarityConfig): string {
   return window.map((item, index) => `${token(item.record.coefficient, config)}:${index > 0 ? intervalBucket((item.timestamp - window[index - 1].timestamp) / 1000) : 'start'}`).join('|');
 }
 
-function median(values: number[]): number | null {
+function arithmeticMean(values: number[]): number | null {
   if (values.length === 0) return null;
-  const sorted = [...values].sort((left, right) => left - right);
-  const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle];
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function trimmedMean(values: number[], trimFraction = 0.1): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].filter(Number.isFinite).sort((left, right) => left - right);
+  if (sorted.length === 0) return null;
+  const trimCount = sorted.length >= 5 ? Math.min(Math.floor(sorted.length * trimFraction), Math.floor((sorted.length - 1) / 2)) : 0;
+  return arithmeticMean(sorted.slice(trimCount, sorted.length - trimCount));
+}
+
+function geometricMean(values: number[]): number | null {
+  const positive = values.filter((value) => Number.isFinite(value) && value > 0);
+  if (positive.length === 0) return null;
+  return Math.exp(positive.reduce((sum, value) => sum + Math.log(value), 0) / positive.length);
 }
 
 function percentile(values: number[], ratio: number): number | null {
@@ -103,6 +128,43 @@ function percentile(values: number[], ratio: number): number | null {
   const lower = Math.floor(position);
   const upper = Math.ceil(position);
   return lower === upper ? sorted[lower] : sorted[lower] + (sorted[upper] - sorted[lower]) * (position - lower);
+}
+
+function intervalBand(seconds: number): { label: string; lowerSeconds: number; upperSeconds: number | null } {
+  if (seconds < 15) return { label: '< 00:00:15', lowerSeconds: 0, upperSeconds: 15 };
+  if (seconds < 30) return { label: '00:00:15–00:00:30', lowerSeconds: 15, upperSeconds: 30 };
+  if (seconds < 60) return { label: '00:00:30–00:01:00', lowerSeconds: 30, upperSeconds: 60 };
+  if (seconds < 300) return { label: '00:01:00–00:05:00', lowerSeconds: 60, upperSeconds: 300 };
+  return { label: '≥ 00:05:00', lowerSeconds: 300, upperSeconds: null };
+}
+
+function dominantInterval(values: number[]): DominantInterval | null {
+  const finiteValues = values.filter((value) => Number.isFinite(value) && value >= 0);
+  if (finiteValues.length === 0) return null;
+  const grouped = new Map<string, DominantInterval>();
+  finiteValues.forEach((value) => {
+    const band = intervalBand(value);
+    const existing = grouped.get(band.label);
+    if (existing) existing.count += 1;
+    else grouped.set(band.label, { ...band, count: 1, sampleSize: finiteValues.length });
+  });
+  return [...grouped.values()].sort((left, right) => right.count - left.count || left.lowerSeconds - right.lowerSeconds)[0] ?? null;
+}
+
+function buildProjectionMetrics(delays: number[], targetCoefficients: number[]): Pick<SimilarityResult, 'centralDelaySeconds' | 'delayP25Seconds' | 'delayP75Seconds' | 'minDelaySeconds' | 'maxDelaySeconds' | 'dominantInterval' | 'centralTargetCoefficient' | 'p25TargetCoefficient' | 'p75TargetCoefficient' | 'delayMethod' | 'coefficientMethod'> {
+  return {
+    centralDelaySeconds: delays.length >= 10 ? trimmedMean(delays) : arithmeticMean(delays),
+    delayP25Seconds: percentile(delays, 0.25),
+    delayP75Seconds: percentile(delays, 0.75),
+    minDelaySeconds: delays.length > 0 ? Math.min(...delays) : null,
+    maxDelaySeconds: delays.length > 0 ? Math.max(...delays) : null,
+    dominantInterval: dominantInterval(delays),
+    centralTargetCoefficient: geometricMean(targetCoefficients),
+    p25TargetCoefficient: percentile(targetCoefficients, 0.25),
+    p75TargetCoefficient: percentile(targetCoefficients, 0.75),
+    delayMethod: delays.length === 0 ? null : delays.length >= 10 ? 'trimmed-mean-20%' : 'arithmetic-mean-small-sample',
+    coefficientMethod: targetCoefficients.length > 0 ? 'geometric-mean' : null,
+  };
 }
 
 export function analyzeLiveSimilarity(records: JsonRecord[], inputConfig: Partial<SimilarityConfig> = {}, selectedRecords?: JsonRecord[]): SimilarityResult {
@@ -119,7 +181,7 @@ export function analyzeLiveSimilarity(records: JsonRecord[], inputConfig: Partia
   const selectedWindow = selectedRecords && selectedRecords.length > 0 ? getValidRecords(selectedRecords) : null;
   const currentWindow = selectedWindow && selectedWindow.length > 0 ? selectedWindow : ordered.slice(-config.lookback);
   const effectiveLookback = currentWindow.length;
-  const empty: SimilarityResult = { orderedValidCount: ordered.length, currentWindow: buildSteps(currentWindow, config), matches: [], matchCount: 0, lookback: effectiveLookback, threshold: config.threshold, horizonMinutes: config.horizonMinutes, targetCount: 0, noTargetCount: 0, targetRate: 0, medianDelaySeconds: null, minDelaySeconds: null, maxDelaySeconds: null, medianTargetCoefficient: null, p25TargetCoefficient: null, p75TargetCoefficient: null, estimatedNextTimestamp: null, matchMode: 'none', calculationRoute: 'direct' };
+  const empty: SimilarityResult = { orderedValidCount: ordered.length, currentWindow: buildSteps(currentWindow, config), matches: [], matchCount: 0, lookback: effectiveLookback, threshold: config.threshold, horizonMinutes: config.horizonMinutes, targetCount: 0, noTargetCount: 0, targetRate: 0, centralDelaySeconds: null, delayP25Seconds: null, delayP75Seconds: null, minDelaySeconds: null, maxDelaySeconds: null, dominantInterval: null, centralTargetCoefficient: null, p25TargetCoefficient: null, p75TargetCoefficient: null, estimatedNextTimestamp: null, delayMethod: null, coefficientMethod: null, matchMode: 'none', calculationRoute: 'direct' };
   if (currentWindow.length < 2) return empty;
 
   const currentBandSignature = currentWindow.map((item) => token(item.record.coefficient, config)).join('|');
@@ -154,7 +216,7 @@ export function analyzeLiveSimilarity(records: JsonRecord[], inputConfig: Partia
     const selectedCoefficients = currentWindow.map((item) => item.record.coefficient);
     const selectedIntervals = currentWindow.slice(1).map((item, index) => Math.max(0, (item.timestamp - currentWindow[index].timestamp) / 1000));
     const directTargetCount = selectedCoefficients.filter((value) => value > config.threshold).length;
-    const directMedianDelay = median(selectedIntervals);
+    const metrics = buildProjectionMetrics(selectedIntervals, selectedCoefficients);
     return {
       orderedValidCount: ordered.length,
       currentWindow: buildSteps(currentWindow, config),
@@ -166,19 +228,14 @@ export function analyzeLiveSimilarity(records: JsonRecord[], inputConfig: Partia
       targetCount: directTargetCount,
       noTargetCount: selectedCoefficients.length - directTargetCount,
       targetRate: selectedCoefficients.length > 0 ? directTargetCount / selectedCoefficients.length : 0,
-      medianDelaySeconds: directMedianDelay,
-      minDelaySeconds: selectedIntervals.length > 0 ? Math.min(...selectedIntervals) : null,
-      maxDelaySeconds: selectedIntervals.length > 0 ? Math.max(...selectedIntervals) : null,
+      ...metrics,
       matchMode: 'none',
       calculationRoute: 'direct',
-      medianTargetCoefficient: median(selectedCoefficients),
-      p25TargetCoefficient: percentile(selectedCoefficients, 0.25),
-      p75TargetCoefficient: percentile(selectedCoefficients, 0.75),
-      estimatedNextTimestamp: directMedianDelay !== null ? new Date(currentWindow.at(-1)!.timestamp + directMedianDelay * 1000).toISOString() : null,
+      estimatedNextTimestamp: metrics.centralDelaySeconds !== null ? new Date(currentWindow.at(-1)!.timestamp + metrics.centralDelaySeconds * 1000).toISOString() : null,
     };
   }
-  const medianDelaySeconds = median(delays);
-  const estimatedNextTimestamp = medianDelaySeconds !== null ? new Date(currentWindow.at(-1)!.timestamp + medianDelaySeconds * 1000).toISOString() : null;
+  const metrics = buildProjectionMetrics(delays, targetCoefficients);
+  const estimatedNextTimestamp = metrics.centralDelaySeconds !== null ? new Date(currentWindow.at(-1)!.timestamp + metrics.centralDelaySeconds * 1000).toISOString() : null;
   return {
     orderedValidCount: ordered.length,
     currentWindow: buildSteps(currentWindow, config),
@@ -190,14 +247,9 @@ export function analyzeLiveSimilarity(records: JsonRecord[], inputConfig: Partia
     targetCount: delays.length,
     noTargetCount: matches.length - delays.length,
     targetRate: matches.length > 0 ? delays.length / matches.length : 0,
-    medianDelaySeconds: median(delays),
-    minDelaySeconds: delays.length > 0 ? Math.min(...delays) : null,
-    maxDelaySeconds: delays.length > 0 ? Math.max(...delays) : null,
+    ...metrics,
+    estimatedNextTimestamp,
     matchMode,
     calculationRoute: 'historical',
-    medianTargetCoefficient: median(targetCoefficients),
-    p25TargetCoefficient: percentile(targetCoefficients, 0.25),
-    p75TargetCoefficient: percentile(targetCoefficients, 0.75),
-    estimatedNextTimestamp,
   };
 }
