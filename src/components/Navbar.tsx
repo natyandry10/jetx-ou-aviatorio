@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Table2, BarChart3, Wrench, FileSearch, Radio, Upload, Download, Plus } from 'lucide-react';
+import { Home, Table2, BarChart3, Search, GitBranch, Wrench, FileSearch, Radio, Upload, Download, Plus } from 'lucide-react';
 import { ActiveTab } from '../types';
 
 interface NavbarProps {
@@ -32,6 +32,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               {activeTab === 'accueil' && 'Rubrique : Accueil'}
               {activeTab === 'saisie' && 'Rubrique : Saisie & Données'}
               {activeTab === 'analyse' && 'Rubrique : Analyse'}
+              {activeTab === 'recherche' && 'Rubrique : Recherche'}
+              {activeTab === 'sequences' && 'Rubrique : Séquences'}
               {activeTab === 'tools' && 'Rubrique : Tools'}
               {activeTab === 'scrap-testing' && 'Rubrique : SCRAP TESTING'}
               {activeTab === 'live' && 'Rubrique : LIVE'}
@@ -44,7 +46,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Frosted Navigation Links */}
-        <div className="flex items-center space-x-1 sm:space-x-6 text-xs font-semibold text-slate-600 dark:text-slate-400">
+        <div className="min-w-0 flex-1 overflow-x-auto"><div className="flex w-max items-center space-x-1 sm:space-x-4 text-xs font-semibold text-slate-600 dark:text-slate-400">
           <button
             id="tab-accueil"
             onClick={() => onSelectTab('accueil')}
@@ -85,6 +87,32 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
 
           <button
+            id="tab-recherche"
+            onClick={() => onSelectTab('recherche')}
+            className={`cursor-pointer px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+              activeTab === 'recherche'
+                ? 'text-fuchsia-600 dark:text-fuchsia-400 border-b-2 border-fuchsia-600 dark:border-fuchsia-400 bg-fuchsia-50/50 dark:bg-fuchsia-950/40 pb-1 font-bold'
+                : 'hover:text-fuchsia-600 dark:hover:text-fuchsia-400 hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
+            }`}
+          >
+            <Search className="w-3.5 h-3.5" />
+            <span className="hidden lg:inline">Recherche</span>
+          </button>
+
+          <button
+            id="tab-sequences"
+            onClick={() => onSelectTab('sequences')}
+            className={`cursor-pointer px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+              activeTab === 'sequences'
+                ? 'text-violet-600 dark:text-violet-400 border-b-2 border-violet-600 dark:border-violet-400 bg-violet-50/50 dark:bg-violet-950/40 pb-1 font-bold'
+                : 'hover:text-violet-600 dark:hover:text-violet-400 hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
+            }`}
+          >
+            <GitBranch className="w-3.5 h-3.5" />
+            <span className="hidden lg:inline">Séquences</span>
+          </button>
+
+          <button
             id="tab-tools"
             onClick={() => onSelectTab('tools')}
             className={`cursor-pointer px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
@@ -122,7 +150,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <Radio className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">LIVE</span>
           </button>
-        </div>
+        </div></div>
 
         {/* Quick Actions Buttons */}
         <div className="flex items-center space-x-2">

@@ -16,6 +16,8 @@ import { Navbar } from './components/Navbar';
 import { HomeView } from './components/HomeView';
 import { SaisieView } from './components/SaisieView';
 import { StatsView } from './components/StatsView';
+import { ContextSearchView } from './components/ContextSearchView';
+import { SequencesView } from './components/SequencesView';
 import { ToolsView } from './components/ToolsView';
 import { ScrapTestingView } from './components/ScrapTestingView';
 import { LiveView } from './components/LiveView';
@@ -276,6 +278,14 @@ export default function App() {
             onNavigateToSaisie={() => setActiveTab('saisie')}
             onNavigateToTools={() => setActiveTab('tools')}
           />
+        )}
+
+        {activeTab === 'recherche' && (
+          <ContextSearchView records={records} />
+        )}
+
+        {activeTab === 'sequences' && (
+          <SequencesView records={records} />
         )}
 
         {activeTab === 'tools' && (

@@ -2,8 +2,7 @@ import React from 'react';
 import { JsonRecord } from '../types';
 import { formatDateFrench, getCoefficientBadgeStyle } from '../utils/formatters';
 import { AnalyticsCharts } from './AnalyticsCharts';
-import { BarChart3, TrendingUp, Clock, Award, Layers, Hash, Sparkles, ArrowDown, Wrench } from 'lucide-react';
-import { ContextSearchPanel } from './ContextSearchPanel';
+import { BarChart3, TrendingUp, Clock, Award, Layers, Hash, Wrench } from 'lucide-react';
 
 interface StatsViewProps {
   records: JsonRecord[];
@@ -47,10 +46,6 @@ export const StatsView: React.FC<StatsViewProps> = ({ records, filteredRecords, 
   const sortedHours = Array.from(hourCounts.entries()).sort((a, b) => a[0] - b[0]);
   const maxHourCount = Math.max(...Array.from(hourCounts.values()), 1);
 
-  const focusSequenceAnalysis = () => {
-    document.getElementById('sequence-analysis-title')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
-
   // Bracket ranges
   const brackets = [
     { label: '1.00x - 1.99x', count: records.filter((r) => r.coefficient >= 1 && r.coefficient < 2).length, color: 'bg-slate-500' },
@@ -91,21 +86,6 @@ export const StatsView: React.FC<StatsViewProps> = ({ records, filteredRecords, 
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-fuchsia-200 dark:border-fuchsia-900/60 bg-gradient-to-r from-fuchsia-50 to-indigo-50 dark:from-fuchsia-950/40 dark:to-indigo-950/30 px-5 py-4 shadow-xs">
-        <div className="flex items-start gap-3">
-          <div className="rounded-xl bg-fuchsia-100 dark:bg-fuchsia-900/60 p-2 text-fuchsia-700 dark:text-fuchsia-300"><Sparkles className="h-5 w-5" /></div>
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-fuchsia-700 dark:text-fuchsia-300">Ruban Analyse</p>
-            <p className="mt-1 text-sm font-bold text-slate-900 dark:text-white">Séquences, résultats suivants et multiplicateurs &gt;10x</p>
-            <p className="mt-0.5 text-[11px] text-slate-600 dark:text-slate-300">Analyse historique triée par date et heure, avec regroupements temporels.</p>
-          </div>
-        </div>
-        <button type="button" onClick={focusSequenceAnalysis} className="inline-flex items-center gap-2 rounded-xl bg-fuchsia-600 px-4 py-2 text-xs font-bold text-white shadow-xs transition-colors hover:bg-fuchsia-500 focus:outline-none focus:ring-2 focus:ring-fuchsia-400 focus:ring-offset-2 dark:focus:ring-offset-slate-900">
-          Ouvrir l’analyse <ArrowDown className="h-4 w-4" />
-        </button>
-      </div>
-
-      <ContextSearchPanel records={records} />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
