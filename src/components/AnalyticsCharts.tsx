@@ -4,6 +4,7 @@ import { JsonRecord } from '../types';
 import { AdvancedStatsPanel } from './AdvancedStatsPanel';
 import { DriveComparisonPanel } from './DriveComparisonPanel';
 import { SequenceScannerPanel } from './SequenceScannerPanel';
+import { PrecedingSequencePanel } from './PrecedingSequencePanel';
 import {
   AnalyticsPeriod,
   AnalyticsPeriodPreset,
@@ -227,6 +228,8 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ records }) => 
       </section>
 
       <SequenceScannerPanel records={periodRecords} />
+
+      <PrecedingSequencePanel records={periodRecords} />
 
       <AdvancedStatsPanel records={records} period={period} />
 

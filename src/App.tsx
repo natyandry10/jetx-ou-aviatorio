@@ -18,6 +18,7 @@ import { SaisieView } from './components/SaisieView';
 import { StatsView } from './components/StatsView';
 import { ToolsView } from './components/ToolsView';
 import { ScrapTestingView } from './components/ScrapTestingView';
+import { LiveView } from './components/LiveView';
 import { ImportModal } from './components/ImportModal';
 import { ExportModal } from './components/ExportModal';
 import { EditRecordModal } from './components/EditRecordModal';
@@ -291,6 +292,13 @@ export default function App() {
             filteredRecords={filteredRecords}
             onNavigateToSaisie={() => setActiveTab('saisie')}
             onNavigateToAnalyse={() => setActiveTab('analyse')}
+            onNavigateToTools={() => setActiveTab('tools')}
+          />
+        )}
+
+        {activeTab === 'live' && (
+          <LiveView
+            onNavigateToSaisie={() => setActiveTab('saisie')}
             onNavigateToTools={() => setActiveTab('tools')}
           />
         )}

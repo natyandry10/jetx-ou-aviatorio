@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Table2, BarChart3, Wrench, FileSearch, Upload, Download, Plus } from 'lucide-react';
+import { Home, Table2, BarChart3, Wrench, FileSearch, Radio, Upload, Download, Plus } from 'lucide-react';
 import { ActiveTab } from '../types';
 
 interface NavbarProps {
@@ -34,6 +34,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               {activeTab === 'analyse' && 'Rubrique : Analyse'}
               {activeTab === 'tools' && 'Rubrique : Tools'}
               {activeTab === 'scrap-testing' && 'Rubrique : SCRAP TESTING'}
+              {activeTab === 'live' && 'Rubrique : LIVE'}
             </span>
           </div>
 
@@ -107,6 +108,19 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <FileSearch className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">SCRAP TESTING</span>
+          </button>
+
+          <button
+            id="tab-live"
+            onClick={() => onSelectTab('live')}
+            className={`cursor-pointer px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+              activeTab === 'live'
+                ? 'text-emerald-600 dark:text-emerald-400 border-b-2 border-emerald-600 dark:border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/40 pb-1 font-bold'
+                : 'hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
+            }`}
+          >
+            <Radio className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">LIVE</span>
           </button>
         </div>
 

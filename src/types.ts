@@ -27,7 +27,7 @@ export interface SortConfig {
   direction: SortDirection;
 }
 
-export type ActiveTab = 'accueil' | 'saisie' | 'analyse' | 'tools' | 'scrap-testing';
+export type ActiveTab = 'accueil' | 'saisie' | 'analyse' | 'tools' | 'scrap-testing' | 'live';
 
 export interface ImportMetadata {
   source: 'local' | 'drive';
