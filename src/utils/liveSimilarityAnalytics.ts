@@ -104,7 +104,7 @@ function percentile(values: number[], ratio: number): number | null {
   return lower === upper ? sorted[lower] : sorted[lower] + (sorted[upper] - sorted[lower]) * (position - lower);
 }
 
-export function analyzeLiveSimilarity(records: JsonRecord[], inputConfig: Partial<SimilarityConfig> = {}): SimilarityResult {
+export function analyzeLiveSimilarity(records: JsonRecord[], inputConfig: Partial<SimilarityConfig> = {}, selectedRecords?: JsonRecord[]): SimilarityResult {
   const config: SimilarityConfig = {
     ...DEFAULT_CONFIG,
     ...inputConfig,
@@ -115,16 +115,19 @@ export function analyzeLiveSimilarity(records: JsonRecord[], inputConfig: Partia
     intervalToleranceSeconds: Math.min(300, Math.max(0, Number(inputConfig.intervalToleranceSeconds ?? DEFAULT_CONFIG.intervalToleranceSeconds))),
   };
   const ordered = getValidRecords(records);
-  const currentWindow = ordered.slice(-config.lookback);
+  const selectedWindow = selectedRecords ? getValidRecords(selectedRecords) : null;
+  const currentWindow = selectedWindow && selectedWindow.length > 0 ? selectedWindow : ordered.slice(-config.lookback);
+  const effectiveLookback = currentWindow.length;
   const empty: SimilarityResult = { orderedValidCount: ordered.length, currentWindow: buildSteps(currentWindow, config), matches: [], matchCount: 0, lookback: config.lookback, threshold: config.threshold, horizonMinutes: config.horizonMinutes, targetCount: 0, noTargetCount: 0, targetRate: 0, medianDelaySeconds: null, minDelaySeconds: null, maxDelaySeconds: null, medianTargetCoefficient: null, p25TargetCoefficient: null, p75TargetCoefficient: null, estimatedNextTimestamp: null, matchMode: 'none' };
-  if (currentWindow.length < config.lookback) return empty;
+  if (currentWindow.length < 2) return empty;
 
   const currentBandSignature = currentWindow.map((item) => token(item.record.coefficient, config)).join('|');
-  const currentStartIndex = ordered.length - config.lookback;
+  const excludedIds = new Set(currentWindow.map((item) => item.record.id));
   const candidateStarts: number[] = [];
   const strictStarts: number[] = [];
-  for (let start = 0; start + config.lookback < currentStartIndex; start += 1) {
-    const window = ordered.slice(start, start + config.lookback);
+  for (let start = 0; start + effectiveLookback <= ordered.length; start += 1) {
+    const window = ordered.slice(start, start + effectiveLookback);
+    if (window.some((item) => excludedIds.has(item.record.id))) continue;
     if (window.map((item) => token(item.record.coefficient, config)).join('|') !== currentBandSignature) continue;
     candidateStarts.push(start);
     const intervalsMatch = window.every((item, index) => index === 0 || Math.abs((item.timestamp - window[index - 1].timestamp) / 1000 - (currentWindow[index].timestamp - currentWindow[index - 1].timestamp) / 1000) <= config.intervalToleranceSeconds);
