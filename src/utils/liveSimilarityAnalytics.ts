@@ -54,6 +54,7 @@ export interface SimilarityResult {
   p25TargetCoefficient: number | null;
   p75TargetCoefficient: number | null;
   estimatedNextTimestamp: string | null;
+  analysisStartedAt: string | null;
   delayMethod: 'trimmed-mean-20%' | 'arithmetic-mean-small-sample' | null;
   coefficientMethod: 'geometric-mean' | null;
 }
@@ -167,7 +168,7 @@ function buildProjectionMetrics(delays: number[], targetCoefficients: number[]):
   };
 }
 
-export function analyzeLiveSimilarity(records: JsonRecord[], inputConfig: Partial<SimilarityConfig> = {}, selectedRecords?: JsonRecord[]): SimilarityResult {
+export function analyzeLiveSimilarity(records: JsonRecord[], inputConfig: Partial<SimilarityConfig> = {}, selectedRecords?: JsonRecord[], analysisStartedAt?: string): SimilarityResult {
   const config: SimilarityConfig = {
     ...DEFAULT_CONFIG,
     ...inputConfig,
@@ -181,7 +182,9 @@ export function analyzeLiveSimilarity(records: JsonRecord[], inputConfig: Partia
   const selectedWindow = selectedRecords && selectedRecords.length > 0 ? getValidRecords(selectedRecords) : null;
   const currentWindow = selectedWindow && selectedWindow.length > 0 ? selectedWindow : ordered.slice(-config.lookback);
   const effectiveLookback = currentWindow.length;
-  const empty: SimilarityResult = { orderedValidCount: ordered.length, currentWindow: buildSteps(currentWindow, config), matches: [], matchCount: 0, lookback: effectiveLookback, threshold: config.threshold, horizonMinutes: config.horizonMinutes, targetCount: 0, noTargetCount: 0, targetRate: 0, centralDelaySeconds: null, delayP25Seconds: null, delayP75Seconds: null, minDelaySeconds: null, maxDelaySeconds: null, dominantInterval: null, centralTargetCoefficient: null, p25TargetCoefficient: null, p75TargetCoefficient: null, estimatedNextTimestamp: null, delayMethod: null, coefficientMethod: null, matchMode: 'none', calculationRoute: 'direct' };
+  const parsedAnalysisStartedAt = analysisStartedAt ? new Date(analysisStartedAt) : null;
+  const analysisAnchorTimestamp = parsedAnalysisStartedAt && Number.isFinite(parsedAnalysisStartedAt.getTime()) ? parsedAnalysisStartedAt.toISOString() : null;
+  const empty: SimilarityResult = { orderedValidCount: ordered.length, currentWindow: buildSteps(currentWindow, config), matches: [], matchCount: 0, lookback: effectiveLookback, threshold: config.threshold, horizonMinutes: config.horizonMinutes, targetCount: 0, noTargetCount: 0, targetRate: 0, centralDelaySeconds: null, delayP25Seconds: null, delayP75Seconds: null, minDelaySeconds: null, maxDelaySeconds: null, dominantInterval: null, centralTargetCoefficient: null, p25TargetCoefficient: null, p75TargetCoefficient: null, estimatedNextTimestamp: null, analysisStartedAt: analysisAnchorTimestamp, delayMethod: null, coefficientMethod: null, matchMode: 'none', calculationRoute: 'direct' };
   if (currentWindow.length < 2) return empty;
 
   const currentBandSignature = currentWindow.map((item) => token(item.record.coefficient, config)).join('|');
@@ -231,11 +234,12 @@ export function analyzeLiveSimilarity(records: JsonRecord[], inputConfig: Partia
       ...metrics,
       matchMode: 'none',
       calculationRoute: 'direct',
-      estimatedNextTimestamp: metrics.centralDelaySeconds !== null ? new Date(currentWindow.at(-1)!.timestamp + metrics.centralDelaySeconds * 1000).toISOString() : null,
+      analysisStartedAt: analysisAnchorTimestamp,
+      estimatedNextTimestamp: metrics.centralDelaySeconds !== null ? new Date((parsedAnalysisStartedAt && Number.isFinite(parsedAnalysisStartedAt.getTime()) ? parsedAnalysisStartedAt.getTime() : currentWindow.at(-1)!.timestamp) + metrics.centralDelaySeconds * 1000).toISOString() : null,
     };
   }
   const metrics = buildProjectionMetrics(delays, targetCoefficients);
-  const estimatedNextTimestamp = metrics.centralDelaySeconds !== null ? new Date(currentWindow.at(-1)!.timestamp + metrics.centralDelaySeconds * 1000).toISOString() : null;
+  const estimatedNextTimestamp = metrics.centralDelaySeconds !== null ? new Date((parsedAnalysisStartedAt && Number.isFinite(parsedAnalysisStartedAt.getTime()) ? parsedAnalysisStartedAt.getTime() : currentWindow.at(-1)!.timestamp) + metrics.centralDelaySeconds * 1000).toISOString() : null;
   return {
     orderedValidCount: ordered.length,
     currentWindow: buildSteps(currentWindow, config),
@@ -249,6 +253,7 @@ export function analyzeLiveSimilarity(records: JsonRecord[], inputConfig: Partia
     targetRate: matches.length > 0 ? delays.length / matches.length : 0,
     ...metrics,
     estimatedNextTimestamp,
+    analysisStartedAt: analysisAnchorTimestamp,
     matchMode,
     calculationRoute: 'historical',
   };
