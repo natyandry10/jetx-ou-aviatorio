@@ -3,6 +3,7 @@ import { JsonRecord } from '../types';
 import { formatDateFrench, getCoefficientBadgeStyle } from '../utils/formatters';
 import { AnalyticsCharts } from './AnalyticsCharts';
 import { BarChart3, TrendingUp, Clock, Award, Layers, Hash, Sparkles, ArrowDown, Wrench } from 'lucide-react';
+import { ContextSearchPanel } from './ContextSearchPanel';
 
 interface StatsViewProps {
   records: JsonRecord[];
@@ -103,6 +104,8 @@ export const StatsView: React.FC<StatsViewProps> = ({ records, filteredRecords, 
           Ouvrir l’analyse <ArrowDown className="h-4 w-4" />
         </button>
       </div>
+
+      <ContextSearchPanel records={records} />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
