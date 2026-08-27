@@ -3,6 +3,7 @@ import { Eye, FileJson, Pause, Play, Radio, RefreshCw, Table2, Wrench } from 'lu
 import { useGoogleDriveAuth } from '../auth/GoogleDriveAuthContext';
 import { GoogleDriveLoginPanel } from './GoogleDriveLoginPanel';
 import { LiveAnalysisWorkbench } from './LiveAnalysisWorkbench';
+import { RecordedWindowPanel } from './RecordedWindowPanel';
 import { DriveFile, listDriveJsonFiles, loadDriveJsonFile } from '../utils/drive';
 import { JsonRecord } from '../types';
 
@@ -190,6 +191,8 @@ export const LiveView: React.FC<LiveViewProps> = ({ onNavigateToSaisie, onNaviga
     {error && <p className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 dark:border-rose-900/70 dark:bg-rose-950/30 dark:text-rose-200">{error}</p>}
 
     <div className="grid grid-cols-2 gap-3 md:grid-cols-4"><div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">État</p><p className={`mt-1 text-lg font-bold ${isLive ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-800 dark:text-slate-100'}`}>{isLive ? 'ACTIF' : 'EN PAUSE'}</p><p className="text-[10px] text-slate-500 dark:text-slate-400">mise à jour : 1 s</p></div><div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4 dark:border-indigo-900/70 dark:bg-indigo-950/20"><p className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-300">Résultats visibles</p><p className="mt-1 text-lg font-bold text-indigo-900 dark:text-indigo-100">{liveRecords.length}</p><p className="text-[10px] text-indigo-700 dark:text-indigo-300">dédupliqués par hash</p></div><div className="rounded-xl border border-rose-200 bg-rose-50/60 p-4 dark:border-rose-900/70 dark:bg-rose-950/20"><p className="text-[10px] font-bold uppercase tracking-wider text-rose-700 dark:text-rose-300">Dernière lecture</p><p className="mt-1 text-lg font-bold text-rose-900 dark:text-rose-100">{lastUpdatedAt ? formatClock(lastUpdatedAt) : '—'}</p><p className="text-[10px] text-rose-700 dark:text-rose-300">{lastLoadedCount} ligne(s) dans le fichier</p></div><div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-900/70 dark:bg-amber-950/20"><p className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">Nouvelles lignes</p><p className="mt-1 text-lg font-bold text-amber-900 dark:text-amber-100">{newRecordsCount}</p><p className="text-[10px] text-amber-700 dark:text-amber-300">à la dernière lecture</p></div></div>
+
+    <RecordedWindowPanel records={liveRecords} sourceName={selectedFile?.name} />
 
     <LiveAnalysisWorkbench records={liveRecords} selectedRecords={selectedAnalysisRecords} onBeginSelection={beginAnalysisSelection} onAnalysisFinished={finishAnalysisSelection} sourceName={selectedFile?.name} />
 
