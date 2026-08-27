@@ -81,7 +81,7 @@ export function calculateRecordedWindow(
       const occurrenceCount = occurrenceCounts.get(roundedCoefficient) ?? 0;
       return { record, timestamp, roundedCoefficient, occurrenceCount, occurrenceRate: inWindow.length > 0 ? (occurrenceCount / inWindow.length) * 100 : 0 };
     })
-    .sort((left, right) => left.timestamp - right.timestamp || left.record.id.localeCompare(right.record.id));
+    .sort((left, right) => secondsOfDay(left.timestamp) - secondsOfDay(right.timestamp) || left.timestamp - right.timestamp || left.record.id.localeCompare(right.record.id));
   return { rows, totalValidInWindow: inWindow.length, totalAboveThreshold: rows.length, startSeconds, endSeconds, dateFilter };
 }
 
