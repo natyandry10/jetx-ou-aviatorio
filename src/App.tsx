@@ -41,6 +41,7 @@ export default function App() {
   const [records, setRecords] = useState<JsonRecord[]>([]);
   const [isStorageLoaded, setIsStorageLoaded] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>('accueil');
+  const [contextSearchQuery, setContextSearchQuery] = useState('');
   const [filters, setFilters] = useState<FilterState>(INITIAL_FILTER_STATE);
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     field: 'date_brute',
@@ -93,6 +94,11 @@ export default function App() {
       field,
       direction: prev.field === field && prev.direction === 'asc' ? 'desc' : 'asc',
     }));
+  };
+
+  const handleSearchCoefficientFromLive = (coefficient: number) => {
+    setContextSearchQuery(coefficient.toFixed(2));
+    setActiveTab('recherche');
   };
 
   // Reset filters
@@ -281,7 +287,7 @@ export default function App() {
         )}
 
         {activeTab === 'recherche' && (
-          <ContextSearchView records={records} />
+          <ContextSearchView records={records} initialQuery={contextSearchQuery} />
         )}
 
         {activeTab === 'sequences' && (
@@ -311,6 +317,7 @@ export default function App() {
             records={records}
             onNavigateToSaisie={() => setActiveTab('saisie')}
             onNavigateToTools={() => setActiveTab('tools')}
+            onSearchCoefficient={handleSearchCoefficientFromLive}
           />
         )}
       </main>
