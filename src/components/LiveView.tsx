@@ -12,6 +12,7 @@ interface LiveRecord extends JsonRecord {
 }
 
 interface LiveViewProps {
+  records: JsonRecord[];
   onNavigateToSaisie: () => void;
   onNavigateToTools: () => void;
 }
@@ -41,7 +42,7 @@ function coefficientClass(value: number): string {
   return 'border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200';
 }
 
-export const LiveView: React.FC<LiveViewProps> = ({ onNavigateToSaisie, onNavigateToTools }) => {
+export const LiveView: React.FC<LiveViewProps> = ({ records: importedRecords, onNavigateToSaisie, onNavigateToTools }) => {
   const { accessToken, isSignedIn } = useGoogleDriveAuth();
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [selectedFileId, setSelectedFileId] = useState('');
@@ -54,6 +55,7 @@ export const LiveView: React.FC<LiveViewProps> = ({ onNavigateToSaisie, onNaviga
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const [lastLoadedCount, setLastLoadedCount] = useState(0);
   const [newRecordsCount, setNewRecordsCount] = useState(0);
+  const [hasLoadedFileSnapshot, setHasLoadedFileSnapshot] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pollingRef = useRef(false);
 
@@ -89,6 +91,7 @@ export const LiveView: React.FC<LiveViewProps> = ({ onNavigateToSaisie, onNaviga
     try {
       const loaded = await loadDriveJsonFile(selectedFileId, undefined, accessToken, selectedFile?.name);
       const nextRecords = loaded.records.map(toLiveRecord).filter((record): record is LiveRecord => record !== null);
+      setHasLoadedFileSnapshot(true);
       setLiveRecords((current) => {
         const byHash = new Map<string, LiveRecord>(current.map((record) => [record.hash, record]));
         let added = 0;
@@ -118,6 +121,7 @@ export const LiveView: React.FC<LiveViewProps> = ({ onNavigateToSaisie, onNaviga
     setLastUpdatedAt(null);
     setLastLoadedCount(0);
     setNewRecordsCount(0);
+    setHasLoadedFileSnapshot(false);
   }, [selectedFileId]);
 
   useEffect(() => {
@@ -134,6 +138,7 @@ export const LiveView: React.FC<LiveViewProps> = ({ onNavigateToSaisie, onNaviga
       setSelectedFileId('');
       setIsSelectingAnalysis(false);
       setAnalysisSelectionKeys([]);
+      setHasLoadedFileSnapshot(false);
       return;
     }
     if (accessToken) void refreshFiles();
@@ -170,6 +175,9 @@ export const LiveView: React.FC<LiveViewProps> = ({ onNavigateToSaisie, onNaviga
     setError(null);
   };
 
+  const recordedWindowRecords = hasLoadedFileSnapshot ? liveRecords : importedRecords;
+  const recordedWindowSource = hasLoadedFileSnapshot ? selectedFile?.name : importedRecords.length > 0 ? 'Données Saisie & Données' : selectedFile?.name;
+
   const toggleLive = () => {
     if (!selectedFileId) {
       setError('Choisis un fichier JSON Drive avant de démarrer LIVE.');
@@ -192,7 +200,7 @@ export const LiveView: React.FC<LiveViewProps> = ({ onNavigateToSaisie, onNaviga
 
     <div className="grid grid-cols-2 gap-3 md:grid-cols-4"><div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">État</p><p className={`mt-1 text-lg font-bold ${isLive ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-800 dark:text-slate-100'}`}>{isLive ? 'ACTIF' : 'EN PAUSE'}</p><p className="text-[10px] text-slate-500 dark:text-slate-400">mise à jour : 1 s</p></div><div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4 dark:border-indigo-900/70 dark:bg-indigo-950/20"><p className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-300">Résultats visibles</p><p className="mt-1 text-lg font-bold text-indigo-900 dark:text-indigo-100">{liveRecords.length}</p><p className="text-[10px] text-indigo-700 dark:text-indigo-300">dédupliqués par hash</p></div><div className="rounded-xl border border-rose-200 bg-rose-50/60 p-4 dark:border-rose-900/70 dark:bg-rose-950/20"><p className="text-[10px] font-bold uppercase tracking-wider text-rose-700 dark:text-rose-300">Dernière lecture</p><p className="mt-1 text-lg font-bold text-rose-900 dark:text-rose-100">{lastUpdatedAt ? formatClock(lastUpdatedAt) : '—'}</p><p className="text-[10px] text-rose-700 dark:text-rose-300">{lastLoadedCount} ligne(s) dans le fichier</p></div><div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-900/70 dark:bg-amber-950/20"><p className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">Nouvelles lignes</p><p className="mt-1 text-lg font-bold text-amber-900 dark:text-amber-100">{newRecordsCount}</p><p className="text-[10px] text-amber-700 dark:text-amber-300">à la dernière lecture</p></div></div>
 
-    <RecordedWindowPanel records={liveRecords} sourceName={selectedFile?.name} />
+    <RecordedWindowPanel records={recordedWindowRecords} sourceName={recordedWindowSource} />
 
     <LiveAnalysisWorkbench records={liveRecords} selectedRecords={selectedAnalysisRecords} onBeginSelection={beginAnalysisSelection} onAnalysisFinished={finishAnalysisSelection} sourceName={selectedFile?.name} />
 

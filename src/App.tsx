@@ -308,6 +308,7 @@ export default function App() {
 
         {activeTab === 'live' && (
           <LiveView
+            records={records}
             onNavigateToSaisie={() => setActiveTab('saisie')}
             onNavigateToTools={() => setActiveTab('tools')}
           />
