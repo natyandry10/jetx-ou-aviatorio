@@ -152,7 +152,7 @@ export function analyzeRecurrences(records: JsonRecord[], filters: RecurrenceFil
       maximumCoefficient: bounds.maximum,
       occurrences: occurrenceDetails(items, startMinute),
     };
-  }).filter((slot) => slot.totalDays >= filters.minimumDays).sort((left, right) => right.presenceRate - left.presenceRate || right.daysWithMatch - left.daysWithMatch || left.startMinute - right.startMinute);
+  }).filter((slot) => slot.totalDays >= filters.minimumDays && slot.daysWithMatch >= 2).sort((left, right) => right.presenceRate - left.presenceRate || right.daysWithMatch - left.daysWithMatch || left.startMinute - right.startMinute);
 
   const weekdayMap = new Map<number, { dates: Set<string>; matchingDates: Set<string>; items: TimedRecord[] }>();
   inRange.forEach((item) => {
@@ -180,7 +180,7 @@ export function analyzeRecurrences(records: JsonRecord[], filters: RecurrenceFil
       maximumCoefficient: bounds.maximum,
       occurrences: occurrenceDetails(entry.items, filters.startMinute),
     };
-  }).filter((day) => day.totalDays >= filters.minimumDays).sort((left, right) => right.presenceRate - left.presenceRate || right.daysWithMatch - left.daysWithMatch || left.weekday - right.weekday);
+  }).filter((day) => day.totalDays >= filters.minimumDays && day.daysWithMatch >= 2).sort((left, right) => right.presenceRate - left.presenceRate || right.daysWithMatch - left.daysWithMatch || left.weekday - right.weekday);
 
   return {
     totalValidRecords: parsed.length,
