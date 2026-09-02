@@ -21,6 +21,7 @@ import { SequencesView } from './components/SequencesView';
 import { ToolsView } from './components/ToolsView';
 import { ScrapTestingView } from './components/ScrapTestingView';
 import { LiveView } from './components/LiveView';
+import { FloatingClocks } from './components/FloatingClocks';
 import { ImportModal } from './components/ImportModal';
 import { ExportModal } from './components/ExportModal';
 import { EditRecordModal } from './components/EditRecordModal';
@@ -321,6 +322,8 @@ export default function App() {
           />
         )}
       </main>
+
+      <FloatingClocks />
 
       {/* Footer */}
       <footer className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800/80 py-4 text-center text-xs text-slate-500 dark:text-slate-400">
