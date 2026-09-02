@@ -2,6 +2,7 @@ import React from 'react';
 import { JsonRecord } from '../types';
 import { formatDateFrench, getCoefficientBadgeStyle } from '../utils/formatters';
 import { AnalyticsCharts } from './AnalyticsCharts';
+import { RecurrenceSummaryPanel } from './RecurrenceSummaryPanel';
 import { BarChart3, TrendingUp, Clock, Award, Layers, Hash, Wrench } from 'lucide-react';
 
 interface StatsViewProps {
@@ -86,6 +87,8 @@ export const StatsView: React.FC<StatsViewProps> = ({ records, filteredRecords, 
         </div>
       </div>
 
+
+      <RecurrenceSummaryPanel records={records} sourceName="Toutes les données actuellement chargées" />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
