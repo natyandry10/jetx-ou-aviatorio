@@ -11,6 +11,16 @@ export interface RecurrenceFilters {
   minimumDays: number;
 }
 
+export interface RecurrenceOccurrence {
+  id: string;
+  hash: string;
+  timestamp: number;
+  dateKey: string;
+  coefficient: number;
+  offsetFromSlotStartSeconds: number;
+  intervalFromPreviousMatchSeconds: number | null;
+}
+
 export interface RecurrenceSlotSummary {
   startMinute: number;
   endMinute: number;
@@ -21,6 +31,7 @@ export interface RecurrenceSlotSummary {
   occurrenceCount: number;
   minimumCoefficient: number | null;
   maximumCoefficient: number | null;
+  occurrences: RecurrenceOccurrence[];
 }
 
 export interface RecurrenceWeekdaySummary {
@@ -32,6 +43,7 @@ export interface RecurrenceWeekdaySummary {
   occurrenceCount: number;
   minimumCoefficient: number | null;
   maximumCoefficient: number | null;
+  occurrences: RecurrenceOccurrence[];
 }
 
 export interface RecurrenceSummary {
@@ -52,6 +64,8 @@ interface TimedRecord {
   minuteOfDay: number;
   weekday: number;
   coefficient: number;
+  id: string;
+  hash: string;
 }
 
 function parseRecord(record: JsonRecord): TimedRecord | null {
@@ -64,6 +78,8 @@ function parseRecord(record: JsonRecord): TimedRecord | null {
     minuteOfDay: date.getHours() * 60 + date.getMinutes(),
     weekday: date.getDay(),
     coefficient: record.coefficient,
+    id: record.id,
+    hash: record.hash,
   };
 }
 
@@ -83,6 +99,25 @@ function percentage(part: number, total: number): number {
 function coefficientBounds(items: TimedRecord[]): { minimum: number | null; maximum: number | null } {
   if (items.length === 0) return { minimum: null, maximum: null };
   return { minimum: Math.min(...items.map((item) => item.coefficient)), maximum: Math.max(...items.map((item) => item.coefficient)) };
+}
+
+function occurrenceDetails(items: TimedRecord[], slotStartMinute: number): RecurrenceOccurrence[] {
+  const ordered = [...items].sort((left, right) => left.timestamp - right.timestamp);
+  const previousByDate = new Map<string, number>();
+  return ordered.map((item) => {
+    const previousTimestamp = previousByDate.get(item.dateKey);
+    previousByDate.set(item.dateKey, item.timestamp);
+    const offsetFromSlotStartSeconds = Math.max(0, (item.minuteOfDay * 60 + (new Date(item.timestamp).getSeconds()) - slotStartMinute * 60));
+    return {
+      id: item.id,
+      hash: item.hash,
+      timestamp: item.timestamp,
+      dateKey: item.dateKey,
+      coefficient: item.coefficient,
+      offsetFromSlotStartSeconds,
+      intervalFromPreviousMatchSeconds: previousTimestamp === undefined ? null : Math.max(0, (item.timestamp - previousTimestamp) / 1000),
+    };
+  });
 }
 
 export function analyzeRecurrences(records: JsonRecord[], filters: RecurrenceFilters): RecurrenceSummary {
@@ -115,6 +150,7 @@ export function analyzeRecurrences(records: JsonRecord[], filters: RecurrenceFil
       occurrenceCount: items.length,
       minimumCoefficient: bounds.minimum,
       maximumCoefficient: bounds.maximum,
+      occurrences: occurrenceDetails(items, startMinute),
     };
   }).filter((slot) => slot.totalDays >= filters.minimumDays).sort((left, right) => right.presenceRate - left.presenceRate || right.daysWithMatch - left.daysWithMatch || left.startMinute - right.startMinute);
 
@@ -142,6 +178,7 @@ export function analyzeRecurrences(records: JsonRecord[], filters: RecurrenceFil
       occurrenceCount: entry.items.length,
       minimumCoefficient: bounds.minimum,
       maximumCoefficient: bounds.maximum,
+      occurrences: occurrenceDetails(entry.items, filters.startMinute),
     };
   }).filter((day) => day.totalDays >= filters.minimumDays).sort((left, right) => right.presenceRate - left.presenceRate || right.daysWithMatch - left.daysWithMatch || left.weekday - right.weekday);
 
